@@ -1,12 +1,12 @@
 /*
  * foc.h — Simplified two-phase field-oriented control for BLDC motors
- *         driven through DRV8833 dual-H-bridge drivers.
+ *         driven through L298N dual-H-bridge drivers.
  */
 
 #pragma once
 
 #include "as5600.h"
-#include "drv8833.h"
+#include "l298n.h"
 #include <stdint.h>
 
 /** Number of magnetic pole pairs.  The 2804 BLDC motor (14 poles /
@@ -14,17 +14,17 @@
 #define FOC_DEFAULT_POLE_PAIRS 7
 
 typedef struct {
-    as5600_t  *encoder;
-    drv8833_t *driver;
-    uint8_t    pole_pairs;
-    float      zero_electrical_angle; /* calibration offset (radians) */
+    as5600_t *encoder;
+    l298n_t  *driver;
+    uint8_t   pole_pairs;
+    float     zero_electrical_angle; /* calibration offset (radians) */
 } foc_motor_t;
 
 /**
  * Initialise and link an encoder + driver pair.
- * Call after as5600_init() and drv8833_init().
+ * Call after as5600_init() and l298n_init().
  */
-void foc_init(foc_motor_t *motor, as5600_t *encoder, drv8833_t *driver,
+void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs);
 
 /**

@@ -9,22 +9,26 @@
 
 /*
  * Motor wiring (2804 BLDC, 3 coil inputs U/V/W):
- *   Coil U → AOUT1–AOUT2  (H-bridge A)
- *   Coil V → BOUT1–BOUT2  (H-bridge B)
- *   Coil W → left floating (two-phase drive)
+ *   ENA + IN1/IN2 → coil U  (H-bridge A)
+ *   ENB + IN3/IN4 → coil V  (H-bridge B)
+ *   Coil W → left floating  (two-phase drive)
  */
 
-/* ── Motor 1 — DRV8833 #1 ─────────────────────────────────────────── */
-#define MOTOR1_AIN1_GPIO    1   /* Coil U – H-bridge A, IN1 */
-#define MOTOR1_AIN2_GPIO    2   /* Coil U – H-bridge A, IN2 */
-#define MOTOR1_BIN1_GPIO    3   /* Coil V – H-bridge B, IN1 */
-#define MOTOR1_BIN2_GPIO    4   /* Coil V – H-bridge B, IN2 */
+/* ── Motor 1 — L298N #1 ───────────────────────────────────────────── */
+#define MOTOR1_ENA_GPIO     1   /* Coil U – H-bridge A, enable (PWM) */
+#define MOTOR1_IN1_GPIO     2   /* Coil U – H-bridge A, direction    */
+#define MOTOR1_IN2_GPIO     3   /* Coil U – H-bridge A, direction    */
+#define MOTOR1_ENB_GPIO     4   /* Coil V – H-bridge B, enable (PWM) */
+#define MOTOR1_IN3_GPIO     5   /* Coil V – H-bridge B, direction    */
+#define MOTOR1_IN4_GPIO     6   /* Coil V – H-bridge B, direction    */
 
-/* ── Motor 2 — DRV8833 #2 ─────────────────────────────────────────── */
-#define MOTOR2_AIN1_GPIO    5   /* Coil U – H-bridge A, IN1 */
-#define MOTOR2_AIN2_GPIO    6   /* Coil U – H-bridge A, IN2 */
-#define MOTOR2_BIN1_GPIO    7   /* Coil V – H-bridge B, IN1 */
-#define MOTOR2_BIN2_GPIO    8   /* Coil V – H-bridge B, IN2 */
+/* ── Motor 2 — L298N #2 ───────────────────────────────────────────── */
+#define MOTOR2_ENA_GPIO     7   /* Coil U – H-bridge A, enable (PWM) */
+#define MOTOR2_IN1_GPIO     8   /* Coil U – H-bridge A, direction    */
+#define MOTOR2_IN2_GPIO     15  /* Coil U – H-bridge A, direction    */
+#define MOTOR2_ENB_GPIO     16  /* Coil V – H-bridge B, enable (PWM) */
+#define MOTOR2_IN3_GPIO     17  /* Coil V – H-bridge B, direction    */
+#define MOTOR2_IN4_GPIO     18  /* Coil V – H-bridge B, direction    */
 
 /* ── Encoder 1 — AS5600 on I2C port 0 ─────────────────────────────── */
 #define ENCODER1_SDA_GPIO   9

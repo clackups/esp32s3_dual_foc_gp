@@ -2,7 +2,7 @@
  * foc.c — Simplified two-phase field-oriented control for 2804 BLDC
  *         motors (3 coil inputs, 7 pole pairs).
  *
- * The DRV8833 dual-H-bridge drives coils U and V with sinusoidal
+ * The L298N dual-H-bridge drives coils U and V with sinusoidal
  * voltages 90° apart; coil W is left floating.
  *
  *   V_u = amplitude · cos(θ_e + 90°)
@@ -17,7 +17,7 @@
 #include "freertos/task.h"
 #include <math.h>
 
-void foc_init(foc_motor_t *motor, as5600_t *encoder, drv8833_t *driver,
+void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs)
 {
     motor->encoder               = encoder;
@@ -30,7 +30,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
 {
     /* Drive a known electrical angle (0) so the rotor aligns. */
     int32_t half = (int32_t)(motor->driver->max_duty / 4);
-    esp_err_t err = drv8833_set_phase(motor->driver, half, 0);
+    esp_err_t err = l298n_set_phase(motor->driver, half, 0);
     if (err != ESP_OK) return err;
 
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -38,14 +38,14 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     float angle;
     err = as5600_read_angle_rad(motor->encoder, &angle);
     if (err != ESP_OK) {
-        drv8833_coast(motor->driver);
+        l298n_coast(motor->driver);
         return err;
     }
 
     motor->zero_electrical_angle =
         fmodf(angle * motor->pole_pairs, 2.0f * (float)M_PI);
 
-    return drv8833_coast(motor->driver);
+    return l298n_coast(motor->driver);
 }
 
 esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
@@ -64,7 +64,7 @@ esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
     int32_t va = (int32_t)(amplitude * cosf(field_angle));
     int32_t vb = (int32_t)(amplitude * sinf(field_angle));
 
-    return drv8833_set_phase(motor->driver, va, vb);
+    return l298n_set_phase(motor->driver, va, vb);
 }
 
 esp_err_t foc_read_angle(const foc_motor_t *motor, float *angle_rad)

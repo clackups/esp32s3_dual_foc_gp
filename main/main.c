@@ -8,7 +8,7 @@
 
 #include "pin_config.h"
 #include "as5600.h"
-#include "drv8833.h"
+#include "l298n.h"
 #include "foc.h"
 #include "haptic.h"
 #include "usb_gamepad.h"
@@ -27,7 +27,7 @@ static const char *TAG = "main";
 
 /* ── Hardware instances ────────────────────────────────────────────── */
 static as5600_t      s_enc1, s_enc2;
-static drv8833_t     s_drv1, s_drv2;
+static l298n_t       s_drv1, s_drv2;
 static foc_motor_t   s_foc1, s_foc2;
 static haptic_axis_t s_axis1, s_axis2;
 
@@ -64,16 +64,18 @@ void app_main(void)
                                 ENCODER_I2C_FREQ_HZ));
 
     ESP_LOGI(TAG, "Initialising motor drivers …");
-    ESP_ERROR_CHECK(drv8833_init(&s_drv1, LEDC_TIMER_0,
-                                 MOTOR1_AIN1_GPIO, MOTOR1_AIN2_GPIO,
-                                 MOTOR1_BIN1_GPIO, MOTOR1_BIN2_GPIO,
-                                 LEDC_CHANNEL_0,
-                                 MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
-    ESP_ERROR_CHECK(drv8833_init(&s_drv2, LEDC_TIMER_1,
-                                 MOTOR2_AIN1_GPIO, MOTOR2_AIN2_GPIO,
-                                 MOTOR2_BIN1_GPIO, MOTOR2_BIN2_GPIO,
-                                 LEDC_CHANNEL_4,
-                                 MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
+    ESP_ERROR_CHECK(l298n_init(&s_drv1, LEDC_TIMER_0,
+                               MOTOR1_ENA_GPIO, MOTOR1_IN1_GPIO,
+                               MOTOR1_IN2_GPIO, MOTOR1_ENB_GPIO,
+                               MOTOR1_IN3_GPIO, MOTOR1_IN4_GPIO,
+                               LEDC_CHANNEL_0,
+                               MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
+    ESP_ERROR_CHECK(l298n_init(&s_drv2, LEDC_TIMER_1,
+                               MOTOR2_ENA_GPIO, MOTOR2_IN1_GPIO,
+                               MOTOR2_IN2_GPIO, MOTOR2_ENB_GPIO,
+                               MOTOR2_IN3_GPIO, MOTOR2_IN4_GPIO,
+                               LEDC_CHANNEL_2,
+                               MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
 
     ESP_LOGI(TAG, "Calibrating FOC …");
     foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS);
