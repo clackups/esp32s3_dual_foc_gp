@@ -25,6 +25,19 @@
 #define MOTOR2_IN2_GPIO     6   /* Coil V – PWM */
 #define MOTOR2_IN3_GPIO     7   /* Coil W – PWM */
 
+/* ── Game controller buttons (active-low, internal pull-up) ────────── */
+#define BUTTON_COUNT        10
+#define BUTTON1_GPIO        4
+#define BUTTON2_GPIO        8
+#define BUTTON3_GPIO        13
+#define BUTTON4_GPIO        14
+#define BUTTON5_GPIO        15
+#define BUTTON6_GPIO        16
+#define BUTTON7_GPIO        17
+#define BUTTON8_GPIO        18
+#define BUTTON9_GPIO        21
+#define BUTTON10_GPIO       38
+
 /* ── Encoder 1 — AS5600 on I2C port 0 ─────────────────────────────── */
 #define ENCODER1_SDA_GPIO   9
 #define ENCODER1_SCL_GPIO   10

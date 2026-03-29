@@ -13,6 +13,7 @@
 #include "haptic.h"
 #include "usb_gamepad.h"
 
+#include "driver/gpio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -24,6 +25,13 @@ static const char *TAG = "main";
 #define MOTOR1_STEPS  12      /* haptic detent steps per revolution   */
 #define MOTOR2_STEPS  24      /* second axis can use a different count */
 #define MOTOR_POLE_PAIRS  FOC_DEFAULT_POLE_PAIRS
+
+/* ── Button GPIO table ─────────────────────────────────────────────── */
+static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
+    BUTTON1_GPIO,  BUTTON2_GPIO,  BUTTON3_GPIO,  BUTTON4_GPIO,
+    BUTTON5_GPIO,  BUTTON6_GPIO,  BUTTON7_GPIO,  BUTTON8_GPIO,
+    BUTTON9_GPIO,  BUTTON10_GPIO,
+};
 
 /* ── Hardware instances ────────────────────────────────────────────── */
 static as5600_t      s_enc1, s_enc2;
@@ -42,10 +50,18 @@ static void haptic_task(void *arg)
         haptic_update(&s_axis1, &pos1);
         haptic_update(&s_axis2, &pos2);
 
+        /* Read button states (active-low → invert). */
+        uint16_t buttons = 0;
+        for (int i = 0; i < BUTTON_COUNT; i++) {
+            if (gpio_get_level(s_button_gpios[i]) == 0) {
+                buttons |= (1U << i);
+            }
+        }
+
         /* Map step index to 0 – 255 range for each axis. */
         uint8_t x = (uint8_t)((uint32_t)pos1 * 255U / (uint32_t)(s_axis1.steps - 1));
         uint8_t y = (uint8_t)((uint32_t)pos2 * 255U / (uint32_t)(s_axis2.steps - 1));
-        usb_gamepad_report(x, y);
+        usb_gamepad_report(x, y, buttons);
 
         /* Run at ~1 kHz. */
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(1));
@@ -62,6 +78,18 @@ void app_main(void)
     ESP_ERROR_CHECK(as5600_init(&s_enc2, ENCODER2_I2C_PORT,
                                 ENCODER2_SDA_GPIO, ENCODER2_SCL_GPIO,
                                 ENCODER_I2C_FREQ_HZ));
+
+    ESP_LOGI(TAG, "Initialising buttons …");
+    for (int i = 0; i < BUTTON_COUNT; i++) {
+        const gpio_config_t btn_cfg = {
+            .pin_bit_mask = 1ULL << s_button_gpios[i],
+            .mode         = GPIO_MODE_INPUT,
+            .pull_up_en   = GPIO_PULLUP_ENABLE,
+            .pull_down_en = GPIO_PULLDOWN_DISABLE,
+            .intr_type    = GPIO_INTR_DISABLE,
+        };
+        ESP_ERROR_CHECK(gpio_config(&btn_cfg));
+    }
 
     ESP_LOGI(TAG, "Initialising motor drivers …");
     ESP_ERROR_CHECK(l298n_init(&s_drv1, LEDC_TIMER_0,

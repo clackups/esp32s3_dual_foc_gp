@@ -16,6 +16,7 @@ full revolution.
 | 2804 BLDC motor | 2 | 3 coil inputs (U/V/W), 7 pole pairs (14P/12N) |
 | AS5600 magnetic encoder | 2 | One per motor, on separate I2C buses |
 | Diametric magnet | 2 | Attached to each motor shaft |
+| Tactile button | 10 | Active-low, one per gamepad button |
 
 ### Default GPIO wiring
 
@@ -30,6 +31,16 @@ changed there without modifying any other file.
 | MOTOR2_IN1  | 5  | Motor 2 coil U – Mini L298N IN1 (PWM) |
 | MOTOR2_IN2  | 6  | Motor 2 coil V – Mini L298N IN2 (PWM) |
 | MOTOR2_IN3  | 7  | Motor 2 coil W – Mini L298N IN3 (PWM) |
+| BUTTON1     | 4  | Game controller button 1 (active-low)  |
+| BUTTON2     | 8  | Game controller button 2 (active-low)  |
+| BUTTON3     | 13 | Game controller button 3 (active-low)  |
+| BUTTON4     | 14 | Game controller button 4 (active-low)  |
+| BUTTON5     | 15 | Game controller button 5 (active-low)  |
+| BUTTON6     | 16 | Game controller button 6 (active-low)  |
+| BUTTON7     | 17 | Game controller button 7 (active-low)  |
+| BUTTON8     | 18 | Game controller button 8 (active-low)  |
+| BUTTON9     | 21 | Game controller button 9 (active-low)  |
+| BUTTON10    | 38 | Game controller button 10 (active-low) |
 | ENCODER1_SDA | 9 | AS5600 #1 – I2C SDA |
 | ENCODER1_SCL | 10 | AS5600 #1 – I2C SCL |
 | ENCODER2_SDA | 11 | AS5600 #2 – I2C SDA |
