@@ -20,8 +20,7 @@ static esp_err_t init_pwm_channel(ledc_channel_t ch, ledc_timer_t timer,
 }
 
 esp_err_t l298n_init(l298n_t *drv, ledc_timer_t timer,
-                     int in1_gpio, int in2_gpio,
-                     int in3_gpio, int in4_gpio,
+                     int in1_gpio, int in2_gpio, int in3_gpio,
                      ledc_channel_t ch_base,
                      uint32_t freq_hz, ledc_timer_bit_t resolution)
 {
@@ -39,7 +38,6 @@ esp_err_t l298n_init(l298n_t *drv, ledc_timer_t timer,
     drv->ch_in1   = ch_base;
     drv->ch_in2   = ch_base + 1;
     drv->ch_in3   = ch_base + 2;
-    drv->in4_gpio = (gpio_num_t)in4_gpio;
     drv->max_duty = (1U << resolution) - 1;
 
     /* PWM on IN1–IN3 (three motor phases). */
@@ -47,20 +45,7 @@ esp_err_t l298n_init(l298n_t *drv, ledc_timer_t timer,
     if (err != ESP_OK) return err;
     err = init_pwm_channel(drv->ch_in2, timer, in2_gpio);
     if (err != ESP_OK) return err;
-    err = init_pwm_channel(drv->ch_in3, timer, in3_gpio);
-    if (err != ESP_OK) return err;
-
-    /* IN4 held LOW (unused output). */
-    const gpio_config_t gpio_cfg = {
-        .pin_bit_mask = 1ULL << in4_gpio,
-        .mode         = GPIO_MODE_OUTPUT,
-        .pull_up_en   = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type    = GPIO_INTR_DISABLE,
-    };
-    err = gpio_config(&gpio_cfg);
-    if (err != ESP_OK) return err;
-    return gpio_set_level(in4_gpio, 0);
+    return init_pwm_channel(drv->ch_in3, timer, in3_gpio);
 }
 
 static esp_err_t set_duty(ledc_channel_t ch, uint32_t duty)

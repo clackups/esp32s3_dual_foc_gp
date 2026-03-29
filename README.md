@@ -27,11 +27,9 @@ changed there without modifying any other file.
 | MOTOR1_IN1  | 1  | Motor 1 coil U – Mini L298N IN1 (PWM) |
 | MOTOR1_IN2  | 2  | Motor 1 coil V – Mini L298N IN2 (PWM) |
 | MOTOR1_IN3  | 3  | Motor 1 coil W – Mini L298N IN3 (PWM) |
-| MOTOR1_IN4  | 4  | Motor 1 unused – Mini L298N IN4 (LOW) |
 | MOTOR2_IN1  | 5  | Motor 2 coil U – Mini L298N IN1 (PWM) |
 | MOTOR2_IN2  | 6  | Motor 2 coil V – Mini L298N IN2 (PWM) |
 | MOTOR2_IN3  | 7  | Motor 2 coil W – Mini L298N IN3 (PWM) |
-| MOTOR2_IN4  | 8  | Motor 2 unused – Mini L298N IN4 (LOW) |
 | ENCODER1_SDA | 9 | AS5600 #1 – I2C SDA |
 | ENCODER1_SCL | 10 | AS5600 #1 – I2C SCL |
 | ENCODER2_SDA | 11 | AS5600 #2 – I2C SDA |
@@ -43,13 +41,12 @@ require no additional configuration.
 ### Motor wiring (2804 BLDC — 3 coil inputs)
 
 Each 2804 motor has three coil wires (U, V, W).  A single Mini L298N
-provides four outputs; three of them drive the three motor coils:
+drives the three motor coils via IN1–IN3:
 
 ```
   IN1 (PWM) ──► OUT1 ──► Coil U
   IN2 (PWM) ──► OUT2 ──► Coil V
   IN3 (PWM) ──► OUT3 ──► Coil W
-  IN4 (LOW) ──► OUT4     (unused)
 ```
 
 The firmware drives all three coils with sinusoidal PWM (120° apart)

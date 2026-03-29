@@ -13,20 +13,17 @@
  *   IN1 (PWM) → OUT1 → Coil U
  *   IN2 (PWM) → OUT2 → Coil V
  *   IN3 (PWM) → OUT3 → Coil W
- *   IN4        → OUT4   (held LOW, unused)
  */
 
 /* ── Motor 1 — Mini L298N #1 ──────────────────────────────────────── */
 #define MOTOR1_IN1_GPIO     1   /* Coil U – PWM */
 #define MOTOR1_IN2_GPIO     2   /* Coil V – PWM */
 #define MOTOR1_IN3_GPIO     3   /* Coil W – PWM */
-#define MOTOR1_IN4_GPIO     4   /* Unused (held LOW) */
 
 /* ── Motor 2 — Mini L298N #2 ──────────────────────────────────────── */
 #define MOTOR2_IN1_GPIO     5   /* Coil U – PWM */
 #define MOTOR2_IN2_GPIO     6   /* Coil V – PWM */
 #define MOTOR2_IN3_GPIO     7   /* Coil W – PWM */
-#define MOTOR2_IN4_GPIO     8   /* Unused (held LOW) */
 
 /* ── Encoder 1 — AS5600 on I2C port 0 ─────────────────────────────── */
 #define ENCODER1_SDA_GPIO   9
