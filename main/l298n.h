@@ -1,15 +1,14 @@
 /*
- * l298n.h — L298N dual-H-bridge motor driver (LEDC PWM + GPIO).
+ * l298n.h — Mini L298N motor driver (3-phase sinusoidal PWM).
  *
- * Each L298N instance controls one 2804 BLDC motor (3 coil inputs
- * U/V/W) using its two H-bridge channels (A → coil U, B → coil V).
- * Coil W is left floating; the two driven phases produce a sinusoidal
- * field that is sufficient for haptic-feedback torque control.
+ * The Mini L298N board exposes only IN1–IN4 (no ENA/ENB).  Each INx
+ * pin directly drives the corresponding OUTx via PWM.  Three of the
+ * four outputs drive the three coils of a 2804 BLDC motor:
  *
- * Control scheme:
- *   ENA / ENB — PWM speed (LEDC channels)
- *   IN1, IN2  — direction for H-bridge A (coil U)
- *   IN3, IN4  — direction for H-bridge B (coil V)
+ *   IN1 (PWM) → OUT1 → Coil U
+ *   IN2 (PWM) → OUT2 → Coil V
+ *   IN3 (PWM) → OUT3 → Coil W
+ *   IN4        → OUT4   (held LOW, unused by the motor)
  */
 
 #pragma once
@@ -19,46 +18,44 @@
 #include "esp_err.h"
 
 typedef struct {
-    ledc_channel_t ch_ena;    /* ENA LEDC channel (coil U speed) */
-    ledc_channel_t ch_enb;    /* ENB LEDC channel (coil V speed) */
-    gpio_num_t     in1_gpio;  /* IN1 – H-bridge A direction */
-    gpio_num_t     in2_gpio;  /* IN2 – H-bridge A direction */
-    gpio_num_t     in3_gpio;  /* IN3 – H-bridge B direction */
-    gpio_num_t     in4_gpio;  /* IN4 – H-bridge B direction */
-    uint32_t       max_duty;  /* Maximum PWM duty (2^resolution − 1) */
+    ledc_channel_t ch_in1;   /* IN1 LEDC channel – phase U */
+    ledc_channel_t ch_in2;   /* IN2 LEDC channel – phase V */
+    ledc_channel_t ch_in3;   /* IN3 LEDC channel – phase W */
+    gpio_num_t     in4_gpio; /* IN4 – held LOW (unused)     */
+    uint32_t       max_duty; /* Maximum PWM duty (2^resolution − 1) */
 } l298n_t;
 
 /**
- * Initialise one L298N (two LEDC PWM channels + four direction GPIOs).
+ * Initialise one Mini L298N (three LEDC PWM channels + one GPIO LOW).
  *
  * @param drv          Pointer to an uninitialised l298n_t.
  * @param timer        LEDC timer to use (LEDC_TIMER_0 … 3).
- * @param ena_gpio     ENA GPIO (PWM for coil U).
- * @param in1_gpio     IN1 GPIO (direction A).
- * @param in2_gpio     IN2 GPIO (direction A).
- * @param enb_gpio     ENB GPIO (PWM for coil V).
- * @param in3_gpio     IN3 GPIO (direction B).
- * @param in4_gpio     IN4 GPIO (direction B).
- * @param ch_base      First LEDC channel to use; two consecutive
+ * @param in1_gpio     IN1 GPIO (PWM → coil U).
+ * @param in2_gpio     IN2 GPIO (PWM → coil V).
+ * @param in3_gpio     IN3 GPIO (PWM → coil W).
+ * @param in4_gpio     IN4 GPIO (held LOW).
+ * @param ch_base      First LEDC channel to use; three consecutive
  *                     channels starting from ch_base will be consumed.
  * @param freq_hz      PWM frequency (e.g. 20 000).
  * @param resolution   LEDC timer resolution (e.g. LEDC_TIMER_10_BIT).
  * @return ESP_OK on success.
  */
 esp_err_t l298n_init(l298n_t *drv, ledc_timer_t timer,
-                     int ena_gpio, int in1_gpio, int in2_gpio,
-                     int enb_gpio, int in3_gpio, int in4_gpio,
+                     int in1_gpio, int in2_gpio,
+                     int in3_gpio, int in4_gpio,
                      ledc_channel_t ch_base,
                      uint32_t freq_hz, ledc_timer_bit_t resolution);
 
 /**
- * Set raw duty for each phase.
+ * Set unsigned PWM duty for each of the three motor phases.
  *
- * @param phase_a  Signed duty for H-bridge A (−max_duty … +max_duty).
- * @param phase_b  Signed duty for H-bridge B (−max_duty … +max_duty).
+ * @param duty_u  Duty for coil U (0 … max_duty).
+ * @param duty_v  Duty for coil V (0 … max_duty).
+ * @param duty_w  Duty for coil W (0 … max_duty).
  */
-esp_err_t l298n_set_phase(const l298n_t *drv,
-                          int32_t phase_a, int32_t phase_b);
+esp_err_t l298n_set_three_phase(const l298n_t *drv,
+                                uint32_t duty_u, uint32_t duty_v,
+                                uint32_t duty_w);
 
 /** Coast (all outputs LOW). */
 esp_err_t l298n_coast(const l298n_t *drv);

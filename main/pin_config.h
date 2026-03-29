@@ -9,26 +9,24 @@
 
 /*
  * Motor wiring (2804 BLDC, 3 coil inputs U/V/W):
- *   ENA + IN1/IN2 → coil U  (H-bridge A)
- *   ENB + IN3/IN4 → coil V  (H-bridge B)
- *   Coil W → left floating  (two-phase drive)
+ *   Mini L298N board — no ENA/ENB; PWM goes directly on IN1–IN3.
+ *   IN1 (PWM) → OUT1 → Coil U
+ *   IN2 (PWM) → OUT2 → Coil V
+ *   IN3 (PWM) → OUT3 → Coil W
+ *   IN4        → OUT4   (held LOW, unused)
  */
 
-/* ── Motor 1 — L298N #1 ───────────────────────────────────────────── */
-#define MOTOR1_ENA_GPIO     1   /* Coil U – H-bridge A, enable (PWM) */
-#define MOTOR1_IN1_GPIO     2   /* Coil U – H-bridge A, direction    */
-#define MOTOR1_IN2_GPIO     3   /* Coil U – H-bridge A, direction    */
-#define MOTOR1_ENB_GPIO     4   /* Coil V – H-bridge B, enable (PWM) */
-#define MOTOR1_IN3_GPIO     5   /* Coil V – H-bridge B, direction    */
-#define MOTOR1_IN4_GPIO     6   /* Coil V – H-bridge B, direction    */
+/* ── Motor 1 — Mini L298N #1 ──────────────────────────────────────── */
+#define MOTOR1_IN1_GPIO     1   /* Coil U – PWM */
+#define MOTOR1_IN2_GPIO     2   /* Coil V – PWM */
+#define MOTOR1_IN3_GPIO     3   /* Coil W – PWM */
+#define MOTOR1_IN4_GPIO     4   /* Unused (held LOW) */
 
-/* ── Motor 2 — L298N #2 ───────────────────────────────────────────── */
-#define MOTOR2_ENA_GPIO     7   /* Coil U – H-bridge A, enable (PWM) */
-#define MOTOR2_IN1_GPIO     8   /* Coil U – H-bridge A, direction    */
-#define MOTOR2_IN2_GPIO     15  /* Coil U – H-bridge A, direction    */
-#define MOTOR2_ENB_GPIO     16  /* Coil V – H-bridge B, enable (PWM) */
-#define MOTOR2_IN3_GPIO     17  /* Coil V – H-bridge B, direction    */
-#define MOTOR2_IN4_GPIO     18  /* Coil V – H-bridge B, direction    */
+/* ── Motor 2 — Mini L298N #2 ──────────────────────────────────────── */
+#define MOTOR2_IN1_GPIO     5   /* Coil U – PWM */
+#define MOTOR2_IN2_GPIO     6   /* Coil V – PWM */
+#define MOTOR2_IN3_GPIO     7   /* Coil W – PWM */
+#define MOTOR2_IN4_GPIO     8   /* Unused (held LOW) */
 
 /* ── Encoder 1 — AS5600 on I2C port 0 ─────────────────────────────── */
 #define ENCODER1_SDA_GPIO   9
