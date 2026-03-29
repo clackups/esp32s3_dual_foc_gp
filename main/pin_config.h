@@ -7,17 +7,24 @@
 
 #pragma once
 
+/*
+ * Motor wiring (2804 BLDC, 3 coil inputs U/V/W):
+ *   Coil U → AOUT1–AOUT2  (H-bridge A)
+ *   Coil V → BOUT1–BOUT2  (H-bridge B)
+ *   Coil W → left floating (two-phase drive)
+ */
+
 /* ── Motor 1 — DRV8833 #1 ─────────────────────────────────────────── */
-#define MOTOR1_AIN1_GPIO    1   /* Phase-A positive */
-#define MOTOR1_AIN2_GPIO    2   /* Phase-A negative */
-#define MOTOR1_BIN1_GPIO    3   /* Phase-B positive */
-#define MOTOR1_BIN2_GPIO    4   /* Phase-B negative */
+#define MOTOR1_AIN1_GPIO    1   /* Coil U – H-bridge A, IN1 */
+#define MOTOR1_AIN2_GPIO    2   /* Coil U – H-bridge A, IN2 */
+#define MOTOR1_BIN1_GPIO    3   /* Coil V – H-bridge B, IN1 */
+#define MOTOR1_BIN2_GPIO    4   /* Coil V – H-bridge B, IN2 */
 
 /* ── Motor 2 — DRV8833 #2 ─────────────────────────────────────────── */
-#define MOTOR2_AIN1_GPIO    5
-#define MOTOR2_AIN2_GPIO    6
-#define MOTOR2_BIN1_GPIO    7
-#define MOTOR2_BIN2_GPIO    8
+#define MOTOR2_AIN1_GPIO    5   /* Coil U – H-bridge A, IN1 */
+#define MOTOR2_AIN2_GPIO    6   /* Coil U – H-bridge A, IN2 */
+#define MOTOR2_BIN1_GPIO    7   /* Coil V – H-bridge B, IN1 */
+#define MOTOR2_BIN2_GPIO    8   /* Coil V – H-bridge B, IN2 */
 
 /* ── Encoder 1 — AS5600 on I2C port 0 ─────────────────────────────── */
 #define ENCODER1_SDA_GPIO   9

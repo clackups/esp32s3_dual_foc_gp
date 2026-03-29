@@ -9,8 +9,8 @@
 #include "drv8833.h"
 #include <stdint.h>
 
-/** Number of magnetic pole pairs in the BLDC motor.  Adjust to match
- *  the actual motor.  A typical small gimbal motor has 7 pole pairs. */
+/** Number of magnetic pole pairs.  The 2804 BLDC motor (14 poles /
+ *  12 slots) has 7 pole pairs. */
 #define FOC_DEFAULT_POLE_PAIRS 7
 
 typedef struct {

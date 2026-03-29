@@ -1,11 +1,12 @@
 /*
- * foc.c — Simplified two-phase field-oriented control.
+ * foc.c — Simplified two-phase field-oriented control for 2804 BLDC
+ *         motors (3 coil inputs, 7 pole pairs).
  *
- * With a DRV8833 (two H-bridges) we drive two motor phases with
- * sinusoidal voltages 90° apart.  The third phase floats.
+ * The DRV8833 dual-H-bridge drives coils U and V with sinusoidal
+ * voltages 90° apart; coil W is left floating.
  *
- *   V_a = amplitude · cos(θ_e + 90°)
- *   V_b = amplitude · sin(θ_e + 90°)
+ *   V_u = amplitude · cos(θ_e + 90°)
+ *   V_v = amplitude · sin(θ_e + 90°)
  *
  * where θ_e = mechanical_angle × pole_pairs − zero_offset.
  * The 90° advance produces maximum torque in the positive direction.

@@ -1,9 +1,10 @@
 /*
  * drv8833.h — DRV8833 dual-H-bridge motor driver (LEDC PWM).
  *
- * Each DRV8833 instance controls one BLDC motor using two H-bridge
- * channels (A and B), producing a two-phase sinusoidal drive that
- * approximates field-oriented control for haptic feedback.
+ * Each DRV8833 instance controls one 2804 BLDC motor (3 coil inputs
+ * U/V/W) using its two H-bridge channels (A → coil U, B → coil V).
+ * Coil W is left floating; the two driven phases produce a sinusoidal
+ * field that is sufficient for haptic-feedback torque control.
  */
 
 #pragma once

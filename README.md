@@ -1,10 +1,11 @@
 # esp32s3_dual_foc_gp
 
 USB game controller for ESP32-S3 where two axes are controlled by two
-BLDC motors coupled with AS5600 magnetic encoders, providing haptic
-detent feedback through the motor torque.  The motors are driven by
-DRV8833 dual-H-bridge ICs.  Each motor axis has a separately
-configurable number of haptic steps per full revolution.
+**2804 BLDC motors** (3 coil inputs, 7 pole pairs) coupled with AS5600
+magnetic encoders, providing haptic detent feedback through the motor
+torque.  The motors are driven by DRV8833 dual-H-bridge ICs.  Each
+motor axis has a separately configurable number of haptic steps per
+full revolution.
 
 ## Hardware
 
@@ -12,7 +13,7 @@ configurable number of haptic steps per full revolution.
 |-----------|-----|-------|
 | ESP32-S3 DevKit | 1 | Any board with native USB-OTG |
 | DRV8833 breakout | 2 | One per BLDC motor |
-| BLDC gimbal motor | 2 | Typically 7 pole pairs |
+| 2804 BLDC motor | 2 | 3 coil inputs (U/V/W), 7 pole pairs (14P/12N) |
 | AS5600 magnetic encoder | 2 | One per motor, on separate I2C buses |
 | Diametric magnet | 2 | Attached to each motor shaft |
 
@@ -23,14 +24,14 @@ changed there without modifying any other file.
 
 | Signal | GPIO | Description |
 |--------|------|-------------|
-| MOTOR1_AIN1 | 1 | Motor 1 – DRV8833 AIN1 |
-| MOTOR1_AIN2 | 2 | Motor 1 – DRV8833 AIN2 |
-| MOTOR1_BIN1 | 3 | Motor 1 – DRV8833 BIN1 |
-| MOTOR1_BIN2 | 4 | Motor 1 – DRV8833 BIN2 |
-| MOTOR2_AIN1 | 5 | Motor 2 – DRV8833 AIN1 |
-| MOTOR2_AIN2 | 6 | Motor 2 – DRV8833 AIN2 |
-| MOTOR2_BIN1 | 7 | Motor 2 – DRV8833 BIN1 |
-| MOTOR2_BIN2 | 8 | Motor 2 – DRV8833 BIN2 |
+| MOTOR1_AIN1 | 1 | Motor 1 coil U – DRV8833 AIN1 |
+| MOTOR1_AIN2 | 2 | Motor 1 coil U – DRV8833 AIN2 |
+| MOTOR1_BIN1 | 3 | Motor 1 coil V – DRV8833 BIN1 |
+| MOTOR1_BIN2 | 4 | Motor 1 coil V – DRV8833 BIN2 |
+| MOTOR2_AIN1 | 5 | Motor 2 coil U – DRV8833 AIN1 |
+| MOTOR2_AIN2 | 6 | Motor 2 coil U – DRV8833 AIN2 |
+| MOTOR2_BIN1 | 7 | Motor 2 coil V – DRV8833 BIN1 |
+| MOTOR2_BIN2 | 8 | Motor 2 coil V – DRV8833 BIN2 |
 | ENCODER1_SDA | 9 | AS5600 #1 – I2C SDA |
 | ENCODER1_SCL | 10 | AS5600 #1 – I2C SCL |
 | ENCODER2_SDA | 11 | AS5600 #2 – I2C SDA |
@@ -38,6 +39,25 @@ changed there without modifying any other file.
 
 USB D−/D+ use the ESP32-S3 native USB-OTG pins (GPIO 19/20) and
 require no additional configuration.
+
+### Motor wiring (2804 BLDC — 3 coil inputs)
+
+Each 2804 motor has three coil wires (U, V, W).  A single DRV8833
+provides two H-bridge channels, which drive two of the three coils:
+
+```
+  Coil U ──── AOUT1 ┐
+                     ├─ H-bridge A (AIN1 / AIN2)
+  Coil U ──── AOUT2 ┘
+  Coil V ──── BOUT1 ┐
+                     ├─ H-bridge B (BIN1 / BIN2)
+  Coil V ──── BOUT2 ┘
+  Coil W ──── (floating)
+```
+
+The firmware drives coils U and V with sinusoidal PWM (90° apart) to
+create a rotating magnetic field.  Coil W is left unconnected.  This
+two-phase drive is sufficient for haptic-detent torque control.
 
 ## Software prerequisites
 
@@ -74,8 +94,9 @@ In **`main/main.c`**, change these defines:
 
 ### Motor pole pairs
 
-Adjust `MOTOR_POLE_PAIRS` in `main/main.c` (or the default in
-`main/foc.h`) to match the BLDC motors you are using.
+The 2804 BLDC motor has 7 pole pairs (14 poles, 12 slots).  The
+default is set in `FOC_DEFAULT_POLE_PAIRS` in `main/foc.h`.  Override
+it per-motor in `main/main.c` if you use a different motor.
 
 ### GPIO assignments
 
@@ -107,9 +128,9 @@ that one file.
    fixed address (0x36).
 
 2. **FOC torque control** — A simplified two-phase FOC algorithm
-   converts a desired torque command into sinusoidal phase voltages.
-   The DRV8833 dual-H-bridge drives two motor phases; the third phase
-   floats.
+   converts a desired torque command into sinusoidal phase voltages for
+   the 2804 motor's coils U and V.  The DRV8833 dual-H-bridge drives
+   these two phases; coil W is left floating.
 
 3. **Haptic detents** — The haptic engine divides one full rotation
    into N equal steps and applies a spring-like restoring torque toward

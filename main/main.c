@@ -1,8 +1,9 @@
 /*
  * main.c — Dual-FOC haptic USB gamepad application entry point.
  *
- * Two BLDC motors with AS5600 encoders provide force-feedback detents.
- * The angular positions are reported as USB HID gamepad axes.
+ * Two 2804 BLDC motors (3 coil inputs, 7 pole pairs) with AS5600
+ * encoders provide force-feedback detents.  The angular positions are
+ * reported as USB HID gamepad axes.
  */
 
 #include "pin_config.h"
