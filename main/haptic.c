@@ -9,9 +9,9 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
                  uint16_t steps, float strength)
 {
     axis->motor      = motor;
-    axis->steps      = steps;
+    axis->steps      = (steps >= 2) ? steps : 2;
     axis->strength   = strength;
-    axis->step_angle = 2.0f * (float)M_PI / (float)steps;
+    axis->step_angle = 2.0f * (float)M_PI / (float)axis->steps;
 }
 
 esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position)

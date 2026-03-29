@@ -25,7 +25,7 @@ esp_err_t drv8833_init(drv8833_t *drv, ledc_timer_t timer,
                        ledc_channel_t ch_base,
                        uint32_t freq_hz, ledc_timer_bit_t resolution)
 {
-    /* Configure the shared timer once. */
+    /* Configure the LEDC timer for this DRV8833 instance. */
     const ledc_timer_config_t timer_cfg = {
         .speed_mode      = LEDC_LOW_SPEED_MODE,
         .timer_num       = timer,

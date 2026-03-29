@@ -43,8 +43,8 @@ static void haptic_task(void *arg)
         haptic_update(&s_axis2, &pos2);
 
         /* Map step index to 0 – 255 range for each axis. */
-        uint8_t x = (uint8_t)((uint32_t)pos1 * 255 / (s_axis1.steps - 1));
-        uint8_t y = (uint8_t)((uint32_t)pos2 * 255 / (s_axis2.steps - 1));
+        uint8_t x = (uint8_t)((uint32_t)pos1 * 255U / (uint32_t)(s_axis1.steps - 1));
+        uint8_t y = (uint8_t)((uint32_t)pos2 * 255U / (uint32_t)(s_axis2.steps - 1));
         usb_gamepad_report(x, y);
 
         /* Run at ~1 kHz. */
