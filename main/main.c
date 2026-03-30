@@ -22,9 +22,14 @@
 static const char *TAG = "main";
 
 /* ── Per-axis configuration ────────────────────────────────────────── */
-#define MOTOR1_STEPS  12      /* haptic detent steps per revolution   */
-#define MOTOR2_STEPS  24      /* second axis can use a different count */
 #define MOTOR_POLE_PAIRS  FOC_DEFAULT_POLE_PAIRS
+
+/* Steps and strength are runtime variables so they can be made
+ * configurable later (e.g. via NVS or USB commands).               */
+static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 12 */
+static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 12 */
+static float    s_motor1_strength = HAPTIC_DEFAULT_STRENGTH;
+static float    s_motor2_strength = HAPTIC_DEFAULT_STRENGTH;
 
 /* ── Button GPIO table ─────────────────────────────────────────────── */
 static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
@@ -110,8 +115,8 @@ void app_main(void)
     ESP_ERROR_CHECK(foc_calibrate(&s_foc2));
 
     ESP_LOGI(TAG, "Setting up haptic axes …");
-    haptic_init(&s_axis1, &s_foc1, MOTOR1_STEPS, HAPTIC_DEFAULT_STRENGTH);
-    haptic_init(&s_axis2, &s_foc2, MOTOR2_STEPS, HAPTIC_DEFAULT_STRENGTH);
+    haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength);
+    haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength);
 
     ESP_LOGI(TAG, "Starting USB gamepad …");
     ESP_ERROR_CHECK(usb_gamepad_init());

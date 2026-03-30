@@ -90,11 +90,21 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 ### Haptic steps per revolution
 
-In **`main/main.c`**, change these defines:
+In **`main/main.c`**, change these variables (initialised at startup):
 
 ```c
-#define MOTOR1_STEPS  12   /* axis 1: 12 detent positions */
-#define MOTOR2_STEPS  24   /* axis 2: 24 detent positions */
+static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 12 */
+static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 12 */
+```
+
+### Haptic feedback strength
+
+Peak normalised torque for the detent effect (0 – 1).  Adjust per-axis
+in **`main/main.c`**:
+
+```c
+static float s_motor1_strength = HAPTIC_DEFAULT_STRENGTH;  /* 0.25 */
+static float s_motor2_strength = HAPTIC_DEFAULT_STRENGTH;  /* 0.25 */
 ```
 
 ### Motor pole pairs
