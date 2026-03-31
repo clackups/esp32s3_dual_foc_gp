@@ -16,7 +16,7 @@
 #define HAPTIC_DEFAULT_STEPS 7
 
 /** Maximum normalised torque applied for the detent effect (0 – 1). */
-#define HAPTIC_DEFAULT_STRENGTH 0.25f
+#define HAPTIC_DEFAULT_STRENGTH 0.75f
 
 typedef struct {
     foc_motor_t *motor;
