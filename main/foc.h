@@ -13,11 +13,16 @@
  *  12 slots) has 7 pole pairs. */
 #define FOC_DEFAULT_POLE_PAIRS 7
 
+/** Number of bins in the encoder-nonlinearity correction table.
+ *  Populated by foc_calibrate() when it sweeps one mechanical revolution. */
+#define FOC_CAL_TABLE_SIZE 128
+
 typedef struct {
     as5600_t *encoder;
     l298n_t  *driver;
     uint8_t   pole_pairs;
-    float     zero_electrical_angle; /* calibration offset (radians) */
+    float     zero_electrical_angle;            /* calibration offset (rad) */
+    float     cal_table[FOC_CAL_TABLE_SIZE];    /* per-bin elec. angle correction */
 } foc_motor_t;
 
 /**
@@ -28,8 +33,10 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs);
 
 /**
- * Run a simple open-loop alignment to find the electrical zero.
- * The motor will briefly energise — keep the shaft unloaded.
+ * Calibrate the motor: find the electrical zero, then sweep one full
+ * mechanical revolution to build a correction table that compensates
+ * for encoder nonlinearity.  The motor will energise for several
+ * seconds — keep the shaft unloaded.
  */
 esp_err_t foc_calibrate(foc_motor_t *motor);
 

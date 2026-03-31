@@ -18,6 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <math.h>
+#include <string.h>
 
 /* 120° in radians. */
 #define TWO_PI_OVER_3  (2.0f * (float)M_PI / 3.0f)
@@ -29,19 +30,24 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
     motor->driver                = driver;
     motor->pole_pairs            = pole_pairs;
     motor->zero_electrical_angle = 0.0f;
+    memset(motor->cal_table, 0, sizeof(motor->cal_table));
 }
 
 esp_err_t foc_calibrate(foc_motor_t *motor)
 {
+    uint32_t half = motor->driver->max_duty / 2;
+    float cal_amplitude = 0.25f;
+    float two_pi = 2.0f * (float)M_PI;
+    float pp     = (float)motor->pole_pairs;
+
     /*
-     * Apply a known electrical angle (0) with moderate amplitude so the
-     * rotor aligns.  3-phase sinusoidal at θ_e = 0:
+     * Phase 1 — Align the rotor to electrical angle 0 and record the
+     * encoder reading to establish zero_electrical_angle.
+     *
      *   U = half + half · 0.25 · sin(0)        = half
      *   V = half + half · 0.25 · sin(−120°)     ≈ half − 0.217·half
      *   W = half + half · 0.25 · sin(+120°)     ≈ half + 0.217·half
      */
-    uint32_t half = motor->driver->max_duty / 2;
-    float cal_amplitude = 0.25f;
     uint32_t du = (uint32_t)(half + half * cal_amplitude * sinf(0.0f));
     uint32_t dv = (uint32_t)(half + half * cal_amplitude * sinf(-TWO_PI_OVER_3));
     uint32_t dw = (uint32_t)(half + half * cal_amplitude * sinf(TWO_PI_OVER_3));
@@ -58,8 +64,56 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         return err;
     }
 
-    motor->zero_electrical_angle =
-        fmodf(angle * motor->pole_pairs, 2.0f * (float)M_PI);
+    motor->zero_electrical_angle = fmodf(angle * pp, two_pi);
+
+    /*
+     * Phase 2 — Sweep one full mechanical revolution (pole_pairs
+     * electrical cycles) while the motor is still energised.
+     *
+     * At each of the FOC_CAL_TABLE_SIZE steps the stator field is set
+     * to a known electrical angle and the rotor aligns to it.  The
+     * difference between the true (commanded) electrical angle and the
+     * naïve value derived from the encoder reading is stored as a
+     * per-bin correction.  At run-time foc_set_torque() interpolates
+     * this table to compensate for AS5600 encoder nonlinearity.
+     */
+    for (int i = 0; i < FOC_CAL_TABLE_SIZE; i++) {
+        float theta_e = (float)i / (float)FOC_CAL_TABLE_SIZE * pp * two_pi;
+
+        du = (uint32_t)(half + half * cal_amplitude * sinf(theta_e));
+        dv = (uint32_t)(half + half * cal_amplitude * sinf(theta_e - TWO_PI_OVER_3));
+        dw = (uint32_t)(half + half * cal_amplitude * sinf(theta_e + TWO_PI_OVER_3));
+
+        err = l298n_set_three_phase(motor->driver, du, dv, dw);
+        if (err != ESP_OK) {
+            memset(motor->cal_table, 0, sizeof(motor->cal_table));
+            l298n_coast(motor->driver);
+            return err;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(20));
+
+        float mech;
+        err = as5600_read_angle_rad(motor->encoder, &mech);
+        if (err != ESP_OK) {
+            memset(motor->cal_table, 0, sizeof(motor->cal_table));
+            l298n_coast(motor->driver);
+            return err;
+        }
+
+        /* What the naïve foc_set_torque() formula would compute: */
+        float naive  = fmodf(mech * pp, two_pi) - motor->zero_electrical_angle;
+
+        /* What the electrical angle actually is (rotor aligned to field): */
+        float actual = fmodf(theta_e, two_pi);
+
+        /* Correction = actual − naïve, normalised to [−π, +π]. */
+        float corr = fmodf(actual - naive, two_pi);
+        if (corr >  (float)M_PI) corr -= two_pi;
+        if (corr < -(float)M_PI) corr += two_pi;
+
+        motor->cal_table[i] = corr;
+    }
 
     return l298n_coast(motor->driver);
 }
@@ -72,6 +126,16 @@ esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
 
     float elec_angle = fmodf(mech_angle * motor->pole_pairs, 2.0f * (float)M_PI)
                        - motor->zero_electrical_angle;
+
+    /* Apply encoder-nonlinearity correction from calibration table. */
+    float bin_f     = mech_angle * ((float)FOC_CAL_TABLE_SIZE / (2.0f * (float)M_PI));
+    float bin_floor = floorf(bin_f);
+    int   bin0      = (int)bin_floor % FOC_CAL_TABLE_SIZE;
+    if (bin0 < 0) bin0 += FOC_CAL_TABLE_SIZE;
+    int   bin1 = (bin0 + 1) % FOC_CAL_TABLE_SIZE;
+    float frac = bin_f - bin_floor;
+    elec_angle += motor->cal_table[bin0]
+               + frac * (motor->cal_table[bin1] - motor->cal_table[bin0]);
 
     /* 90° advance for torque production. */
     float field_angle = elec_angle + (float)M_PI_2;
