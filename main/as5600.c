@@ -42,7 +42,7 @@ esp_err_t as5600_read_raw(const as5600_t *dev, uint16_t *raw_angle)
     esp_err_t err = i2c_master_transmit_receive(dev->dev_handle,
                                                 &reg, sizeof(reg),
                                                 buf, sizeof(buf),
-                                                pdMS_TO_TICKS(50));
+                                                50);
     if (err == ESP_OK) {
         *raw_angle = ((uint16_t)(buf[0] & 0x0F) << 8) | buf[1];
     }
