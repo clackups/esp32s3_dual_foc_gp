@@ -6,12 +6,15 @@
 #include <math.h>
 
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
-                 uint16_t steps, float strength)
+                 uint16_t steps, float strength, float dead_zone)
 {
     axis->motor      = motor;
     axis->steps      = (steps >= 2) ? steps : 2;
     axis->strength   = strength;
     axis->step_angle = 2.0f * (float)M_PI / (float)axis->steps;
+    axis->dead_zone  = (dead_zone < 0.0f) ? 0.0f
+                     : (dead_zone > 0.49f) ? 0.49f
+                     : dead_zone;
 }
 
 esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position)
@@ -34,13 +37,28 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position)
 
     /*
      * Torque is proportional to the error, clamped to ±strength.
-     * Gain is chosen so that at half a step-angle the torque reaches
-     * the configured strength.
+     * A dead-zone around the detent centre allows a small region where
+     * no restoring torque is applied (neutral position).
+     *
+     * Outside the dead zone the torque ramps from zero at the dead-zone
+     * boundary to ±strength at half a step-angle.
      */
-    float gain   = axis->strength / (axis->step_angle * 0.5f);
-    float torque = gain * delta;
-    if (torque >  axis->strength) torque =  axis->strength;
-    if (torque < -axis->strength) torque = -axis->strength;
+    float dz_rad = axis->dead_zone * axis->step_angle;
+    float abs_delta = (delta >= 0.0f) ? delta : -delta;
+    float torque;
+
+    if (abs_delta <= dz_rad) {
+        torque = 0.0f;
+    } else {
+        float active_range = axis->step_angle * 0.5f - dz_rad;
+        float gain = (active_range > 1e-6f)
+                   ? axis->strength / active_range
+                   : 0.0f;
+        float sign = (delta >= 0.0f) ? 1.0f : -1.0f;
+        torque = gain * (abs_delta - dz_rad) * sign;
+        if (torque >  axis->strength) torque =  axis->strength;
+        if (torque < -axis->strength) torque = -axis->strength;
+    }
 
     err = foc_set_torque(axis->motor, torque);
     if (err != ESP_OK) return err;

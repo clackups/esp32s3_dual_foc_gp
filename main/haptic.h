@@ -18,23 +18,33 @@
 /** Maximum normalised torque applied for the detent effect (0 – 1). */
 #define HAPTIC_DEFAULT_STRENGTH 0.75f
 
+/** Default dead-zone expressed as a fraction of one step angle.
+ *  Within this zone around a detent centre the rotor is treated as
+ *  being at the neutral position and no restoring torque is applied.
+ *  Valid range: 0 (disabled) to just below 0.5. */
+#define HAPTIC_DEFAULT_DEAD_ZONE 0.1f
+
 typedef struct {
     foc_motor_t *motor;
     uint16_t     steps;       /* detent positions per revolution */
     float        strength;    /* peak normalised torque (0 – 1)  */
     float        step_angle;  /* 2π / steps (computed)           */
+    float        dead_zone;   /* fraction of step_angle (0–<0.5) */
 } haptic_axis_t;
 
 /**
  * Initialise a haptic axis.
  *
- * @param axis     Pointer to haptic_axis_t to initialise.
- * @param motor    An already-initialised and calibrated foc_motor_t.
- * @param steps    Number of detent steps per full rotation.
- * @param strength Peak normalised torque (0 – 1).
+ * @param axis      Pointer to haptic_axis_t to initialise.
+ * @param motor     An already-initialised and calibrated foc_motor_t.
+ * @param steps     Number of detent steps per full rotation.
+ * @param strength  Peak normalised torque (0 – 1).
+ * @param dead_zone Fraction of one step angle that is still treated as
+ *                  the neutral (detent-centre) position.  0 disables
+ *                  the dead zone; values are clamped below 0.5.
  */
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
-                 uint16_t steps, float strength);
+                 uint16_t steps, float strength, float dead_zone);
 
 /**
  * Run one tick of the haptic loop: read angle, compute nearest detent,

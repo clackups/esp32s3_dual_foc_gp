@@ -30,6 +30,8 @@ static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
 static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
 static float    s_motor1_strength = HAPTIC_DEFAULT_STRENGTH;
 static float    s_motor2_strength = HAPTIC_DEFAULT_STRENGTH;
+static float    s_motor1_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
+static float    s_motor2_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
 
 /* ── Button GPIO table ─────────────────────────────────────────────── */
 static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
@@ -160,8 +162,8 @@ void app_main(void)
     ESP_ERROR_CHECK(foc_calibrate(&s_foc2));
 
     ESP_LOGI(TAG, "Setting up haptic axes …");
-    haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength);
-    haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength);
+    haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength, s_motor1_dead_zone);
+    haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength, s_motor2_dead_zone);
 
     ESP_LOGI(TAG, "Starting USB gamepad …");
     ESP_ERROR_CHECK(usb_gamepad_init());
