@@ -10,8 +10,10 @@
 
 #include "foc.h"
 
-/** Default number of steps per 360° revolution. */
-#define HAPTIC_DEFAULT_STEPS 12
+/** Default number of steps per 360° revolution.
+ *  Matches FOC_DEFAULT_POLE_PAIRS (7) so that every detent centre
+ *  falls at the same electrical angle, giving uniform resistance. */
+#define HAPTIC_DEFAULT_STEPS 7
 
 /** Maximum normalised torque applied for the detent effect (0 – 1). */
 #define HAPTIC_DEFAULT_STRENGTH 0.25f

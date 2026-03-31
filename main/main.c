@@ -26,8 +26,8 @@ static const char *TAG = "main";
 
 /* Steps and strength are runtime variables so they can be made
  * configurable later (e.g. via NVS or USB commands).               */
-static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 12 */
-static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 12 */
+static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
+static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
 static float    s_motor1_strength = HAPTIC_DEFAULT_STRENGTH;
 static float    s_motor2_strength = HAPTIC_DEFAULT_STRENGTH;
 

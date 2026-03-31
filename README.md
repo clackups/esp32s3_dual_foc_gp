@@ -93,8 +93,8 @@ idf.py -p /dev/ttyUSB0 flash monitor
 In **`main/main.c`**, change these variables (initialised at startup):
 
 ```c
-static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 12 */
-static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 12 */
+static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
+static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
 ```
 
 ### Haptic feedback strength
