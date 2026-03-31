@@ -52,6 +52,18 @@ static const uint8_t s_hid_report_desc[] = {
     0xC0               /*  End Collection                      */
 };
 
+/* ── USB configuration descriptor ────────────────────────────────── */
+
+#define TUSB_DESC_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN)
+
+static const uint8_t s_configuration_desc[] = {
+    /* config 1, 1 interface, no string, bus-powered 100 mA */
+    TUD_CONFIG_DESCRIPTOR(1, 1, 0, TUSB_DESC_TOTAL_LEN, 0, 100),
+    /* itf 0, EP 0x81 (IN 1), 64-byte packet, 10 ms poll interval */
+    TUD_HID_DESCRIPTOR(0, 0, HID_ITF_PROTOCOL_NONE,
+                       sizeof(s_hid_report_desc), 0x81, 64, 10),
+};
+
 /* ── TinyUSB descriptor callbacks ────────────────────────────────── */
 
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance)
@@ -86,7 +98,7 @@ esp_err_t usb_gamepad_init(void)
         .string_descriptor        = NULL,
         .string_descriptor_count  = 0,
         .external_phy             = false,
-        .configuration_descriptor = NULL,
+        .configuration_descriptor = s_configuration_desc,
     };
 
     return tinyusb_driver_install(&tusb_cfg);
