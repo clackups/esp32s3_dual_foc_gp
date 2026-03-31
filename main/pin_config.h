@@ -21,14 +21,14 @@
 #define MOTOR1_IN3_GPIO     3   /* Coil W – PWM */
 
 /* ── Motor 2 — Mini L298N #2 ──────────────────────────────────────── */
-#define MOTOR2_IN1_GPIO     5   /* Coil U – PWM */
-#define MOTOR2_IN2_GPIO     6   /* Coil V – PWM */
-#define MOTOR2_IN3_GPIO     7   /* Coil W – PWM */
+#define MOTOR2_IN1_GPIO     6   /* Coil U – PWM */
+#define MOTOR2_IN2_GPIO     7   /* Coil V – PWM */
+#define MOTOR2_IN3_GPIO     8   /* Coil W – PWM */
 
 /* ── Game controller buttons (active-low, internal pull-up) ────────── */
 #define BUTTON_COUNT        10
 #define BUTTON1_GPIO        4
-#define BUTTON2_GPIO        8
+#define BUTTON2_GPIO        5
 #define BUTTON3_GPIO        13
 #define BUTTON4_GPIO        14
 #define BUTTON5_GPIO        15

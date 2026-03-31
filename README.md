@@ -28,11 +28,11 @@ changed there without modifying any other file.
 | MOTOR1_IN1  | 1  | Motor 1 coil U – Mini L298N IN1 (PWM) |
 | MOTOR1_IN2  | 2  | Motor 1 coil V – Mini L298N IN2 (PWM) |
 | MOTOR1_IN3  | 3  | Motor 1 coil W – Mini L298N IN3 (PWM) |
-| MOTOR2_IN1  | 5  | Motor 2 coil U – Mini L298N IN1 (PWM) |
-| MOTOR2_IN2  | 6  | Motor 2 coil V – Mini L298N IN2 (PWM) |
-| MOTOR2_IN3  | 7  | Motor 2 coil W – Mini L298N IN3 (PWM) |
+| MOTOR2_IN1  | 6  | Motor 2 coil U – Mini L298N IN1 (PWM) |
+| MOTOR2_IN2  | 7  | Motor 2 coil V – Mini L298N IN2 (PWM) |
+| MOTOR2_IN3  | 8  | Motor 2 coil W – Mini L298N IN3 (PWM) |
 | BUTTON1     | 4  | Game controller button 1 (active-low)  |
-| BUTTON2     | 8  | Game controller button 2 (active-low)  |
+| BUTTON2     | 5  | Game controller button 2 (active-low)  |
 | BUTTON3     | 13 | Game controller button 3 (active-low)  |
 | BUTTON4     | 14 | Game controller button 4 (active-low)  |
 | BUTTON5     | 15 | Game controller button 5 (active-low)  |
