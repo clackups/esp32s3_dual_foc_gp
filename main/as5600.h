@@ -1,22 +1,24 @@
 /*
  * as5600.h — AS5600 12-bit magnetic rotary encoder (I2C) driver.
+ *
+ * Uses the new ESP-IDF I2C master driver (driver/i2c_master.h).
  */
 
 #pragma once
 
-#include "driver/i2c.h"
+#include "driver/i2c_master.h"
 #include "esp_err.h"
 
 #define AS5600_I2C_ADDR 0x36
 
 typedef struct {
-    i2c_port_t i2c_port;
+    i2c_master_dev_handle_t dev_handle;
 } as5600_t;
 
 /**
- * Initialise the I2C bus for one AS5600 sensor.
+ * Initialise the I2C bus and add the AS5600 device.
  *
- * @param dev  Pointer to an as5600_t that will hold the port number.
+ * @param dev  Pointer to an as5600_t that will hold the device handle.
  * @param port I2C port (I2C_NUM_0 or I2C_NUM_1).
  * @param sda  SDA GPIO number.
  * @param scl  SCL GPIO number.
