@@ -1,0 +1,8 @@
+# Target
+CONFIG_IDF_TARGET="esp32s3"
+
+# USB – HID gamepad with 1 interface
+CONFIG_TINYUSB_HID_COUNT=1
+
+# FreeRTOS
+CONFIG_FREERTOS_HZ=1000
