@@ -13,23 +13,23 @@
 /** Default number of steps per 360° revolution.
  *  Matches FOC_DEFAULT_POLE_PAIRS (7) so that every detent centre
  *  falls at the same electrical angle, giving uniform resistance. */
-#define HAPTIC_DEFAULT_STEPS 7
+#define HAPTIC_DEFAULT_STEPS 21
 
 /** Maximum normalised torque applied for the detent effect (0 – 1). */
-#define HAPTIC_DEFAULT_STRENGTH 0.75f
+#define HAPTIC_DEFAULT_STRENGTH 0.67f
 
 /** Default dead-zone expressed as a fraction of one step angle.
  *  Within this zone around a detent centre the rotor is treated as
  *  being at the neutral position and no restoring torque is applied.
  *  Valid range: 0 (disabled) to just below 0.5. */
-#define HAPTIC_DEFAULT_DEAD_ZONE 0.1f
+#define HAPTIC_DEFAULT_DEAD_ZONE 0.05f
 
 /** Default smoothing factor for exponential moving average on torque.
  *  1.0 = no smoothing (raw torque used directly).
  *  Lower values give heavier smoothing (slower response).
  *  Valid range: 0 (exclusive) to 1 (inclusive); values at or below 0
  *  are clamped to 0.01. */
-#define HAPTIC_DEFAULT_SMOOTHING_ALPHA 0.5f
+#define HAPTIC_DEFAULT_SMOOTHING_ALPHA 0.7f
 
 typedef struct {
     foc_motor_t *motor;
