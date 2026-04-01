@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include "led_strip.h"
 #include <math.h>
+#include <stdbool.h>
 
 static const char *TAG = "main";
 
@@ -101,11 +102,13 @@ static void button_task(void *arg)
     }
 }
 
-/* ── USB HID report task (sends only when values change) ──────────── */
+/* ── USB HID report task (sends on change + every 100 ms) ─────────── */
 static void report_task(void *arg)
 {
     (void)arg;
     uint16_t prev_pos1 = 0, prev_pos2 = 0, prev_buttons = 0;
+    TickType_t last_send = xTaskGetTickCount();
+    const TickType_t periodic_interval = pdMS_TO_TICKS(100);
 
     for (;;) {
         /* Wait for any writer to signal, or time out after 1 ms. */
@@ -115,13 +118,18 @@ static void report_task(void *arg)
         uint16_t pos2    = s_pos2;
         uint16_t buttons = s_buttons;
 
-        if (pos1 != prev_pos1 || pos2 != prev_pos2 || buttons != prev_buttons) {
+        bool changed = (pos1 != prev_pos1 || pos2 != prev_pos2 ||
+                        buttons != prev_buttons);
+        bool periodic = (xTaskGetTickCount() - last_send >= periodic_interval);
+
+        if (changed || periodic) {
             uint8_t x = (uint8_t)((uint32_t)pos1 * 255U / (uint32_t)(s_axis1.steps - 1));
             uint8_t y = (uint8_t)((uint32_t)pos2 * 255U / (uint32_t)(s_axis2.steps - 1));
             usb_gamepad_report(x, y, buttons);
             prev_pos1    = pos1;
             prev_pos2    = pos2;
             prev_buttons = buttons;
+            last_send    = xTaskGetTickCount();
         }
     }
 }
