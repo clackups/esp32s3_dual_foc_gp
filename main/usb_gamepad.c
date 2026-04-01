@@ -13,8 +13,8 @@
  * Report layout (4 bytes total):
  *   byte 0     – buttons 1–8  (bits 0–7)
  *   byte 1     – buttons 9–10 (bits 0–1) + 6-bit padding
- *   byte 2     – X axis (0–255)
- *   byte 3     – Y axis (0–255)
+ *   byte 2     – X axis (0–254, centre 127)
+ *   byte 3     – Y axis (0–254, centre 127)
  */
 static const uint8_t s_hid_report_desc[] = {
     0x05, 0x01,        /*  Usage Page (Generic Desktop)        */
@@ -43,7 +43,7 @@ static const uint8_t s_hid_report_desc[] = {
     0x09, 0x30,        /*      Usage (X)                       */
     0x09, 0x31,        /*      Usage (Y)                       */
     0x15, 0x00,        /*      Logical Minimum (0)             */
-    0x26, 0xFF, 0x00,  /*      Logical Maximum (255)           */
+    0x26, 0xFE, 0x00,  /*      Logical Maximum (254)           */
     0x75, 0x08,        /*      Report Size (8)                 */
     0x95, 0x02,        /*      Report Count (2)                */
     0x81, 0x02,        /*      Input (Data, Var, Abs)          */
