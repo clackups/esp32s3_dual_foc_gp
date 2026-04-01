@@ -55,7 +55,9 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
 
 /* -----------------------------------------------------------------
  * Helper: read the AS5600 angle and apply the manual mounting offset.
- * Result is wrapped to [0, 2π).
+ * Result is wrapped to [0, 2π).  fmodf(x, 2π) always returns a
+ * value in (−2π, 2π), so one conditional addition suffices for any
+ * offset magnitude.
  * ----------------------------------------------------------------- */
 static esp_err_t read_corrected_angle(const foc_motor_t *motor,
                                       float *angle_rad)
