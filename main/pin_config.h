@@ -29,8 +29,8 @@
 #define BUTTON_COUNT        10
 #define BUTTON1_GPIO        4
 #define BUTTON2_GPIO        5
-#define BUTTON3_GPIO        13
-#define BUTTON4_GPIO        14
+#define BUTTON3_GPIO        36
+#define BUTTON4_GPIO        37
 #define BUTTON5_GPIO        6
 #define BUTTON6_GPIO        7
 #define BUTTON7_GPIO        8

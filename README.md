@@ -33,8 +33,8 @@ changed there without modifying any other file.
 | MOTOR2_IN3  | 17 | Motor 2 coil W - Mini L298N IN3 (PWM) |
 | BUTTON1     | 4  | Game controller button 1 (active-low)  |
 | BUTTON2     | 5  | Game controller button 2 (active-low)  |
-| BUTTON3     | 13 | Game controller button 3 (active-low)  |
-| BUTTON4     | 14 | Game controller button 4 (active-low)  |
+| BUTTON3     | 36 | Game controller button 3 (active-low)  |
+| BUTTON4     | 37 | Game controller button 4 (active-low)  |
 | BUTTON5     | 6  | Game controller button 5 (active-low)  |
 | BUTTON6     | 7  | Game controller button 6 (active-low)  |
 | BUTTON7     | 8  | Game controller button 7 (active-low)  |
