@@ -96,3 +96,13 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
  * @return ESP_OK on success.
  */
 esp_err_t haptic_calibrate(haptic_axis_t *axis);
+
+/**
+ * Drive the motor to a specific detent position using proportional
+ * control, then coast.  Blocks for approximately 500 ms.
+ *
+ * @param axis    Initialised and calibrated axis.
+ * @param detent  Target detent index (0 … steps−1).
+ * @return ESP_OK on success.
+ */
+esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent);
