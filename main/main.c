@@ -185,7 +185,9 @@ void app_main(void)
     foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS);
     foc_init(&s_foc2, &s_enc2, &s_drv2, MOTOR_POLE_PAIRS);
     ESP_ERROR_CHECK(foc_calibrate(&s_foc1));
+    ESP_LOGI(TAG, "Zero angle #1: %f", s_foc1.zero_electrical_angle);
     ESP_ERROR_CHECK(foc_calibrate(&s_foc2));
+    ESP_LOGI(TAG, "Zero angle #2: %f", s_foc2.zero_electrical_angle);
 
     ESP_LOGI(TAG, "Setting up haptic axes …");
     haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength, s_motor1_dead_zone, s_motor1_smoothing_alpha);
