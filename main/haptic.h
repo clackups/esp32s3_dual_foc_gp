@@ -38,6 +38,7 @@ typedef struct {
     float        step_angle;       /* 2π / steps (computed)            */
     float        dead_zone;        /* fraction of step_angle (0–<0.5)  */
     float        smoothing_alpha;  /* EMA factor (0 < α ≤ 1)           */
+    float        phase_offset;     /* angular offset for detent centres */
 } haptic_axis_t;
 
 /**
@@ -75,3 +76,23 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
  */
 esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
                         float *prev_torque);
+
+/**
+ * Calibrate the detent phase offset.
+ *
+ * The AS5600 encoder has an arbitrary orientation relative to the motor
+ * coils, so the default detent positions (multiples of step_angle
+ * starting at 0) may not coincide with the motor's natural cogging
+ * positions.  This routine gives the rotor several kicks in alternating
+ * directions, lets it coast to rest after each one, and measures where
+ * it settles.  The mean rest position (circular average) within one
+ * step is stored in axis->phase_offset, shifting every detent so that
+ * its centre aligns with the cogging equilibrium.
+ *
+ * Call after haptic_init() and before the haptic loop starts.
+ * Blocks for approximately 2 seconds.
+ *
+ * @param axis  Initialised axis (motor must be calibrated).
+ * @return ESP_OK on success.
+ */
+esp_err_t haptic_calibrate(haptic_axis_t *axis);

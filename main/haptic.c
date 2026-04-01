@@ -3,6 +3,8 @@
  */
 
 #include "haptic.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <math.h>
 
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
@@ -19,6 +21,7 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
     axis->smoothing_alpha = (smoothing_alpha <= 0.0f) ? 0.01f
                           : (smoothing_alpha > 1.0f)  ? 1.0f
                           : smoothing_alpha;
+    axis->phase_offset = 0.0f;
 }
 
 esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
@@ -29,9 +32,10 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
     if (err != ESP_OK) return err;
 
     /* Nearest detent index and its centre angle. */
-    float idx_f      = angle / axis->step_angle;
+    float shifted     = angle - axis->phase_offset;
+    float idx_f       = shifted / axis->step_angle;
     int   nearest_idx = (int)roundf(idx_f);
-    float detent_angle = (float)nearest_idx * axis->step_angle;
+    float detent_angle = (float)nearest_idx * axis->step_angle + axis->phase_offset;
 
     /* Signed angular error from the detent centre. */
     float delta = detent_angle - angle;
@@ -84,5 +88,67 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
         if (idx < 0) idx += (int)axis->steps;
         *position = (uint16_t)idx;
     }
+    return ESP_OK;
+}
+
+/* ── Haptic calibration ──────────────────────────────────────────── */
+
+/** Number of kick–settle measurements during calibration. */
+#define HAPTIC_CAL_SAMPLES   4
+
+/** Normalised torque amplitude for each calibration kick. */
+#define HAPTIC_CAL_KICK      0.3f
+
+/** Duration of each calibration kick (ms). */
+#define HAPTIC_CAL_KICK_MS   150
+
+/** Settle time after coasting (ms). */
+#define HAPTIC_CAL_SETTLE_MS 300
+
+esp_err_t haptic_calibrate(haptic_axis_t *axis)
+{
+    float two_pi  = 2.0f * (float)M_PI;
+    float sum_sin = 0.0f;
+    float sum_cos = 0.0f;
+
+    for (int i = 0; i < HAPTIC_CAL_SAMPLES; i++) {
+        /*
+         * Alternating kick direction moves the rotor to different
+         * cogging positions so we sample more than one resting spot.
+         */
+        float kick = (i % 2 == 0) ? HAPTIC_CAL_KICK : -HAPTIC_CAL_KICK;
+
+        esp_err_t err = foc_set_torque(axis->motor, kick);
+        if (err != ESP_OK) return err;
+        vTaskDelay(pdMS_TO_TICKS(HAPTIC_CAL_KICK_MS));
+
+        /*
+         * Coast the motor — let it settle at the nearest cogging
+         * position under the rotor magnets' natural pull.
+         */
+        err = l298n_coast(axis->motor->driver);
+        if (err != ESP_OK) return err;
+        vTaskDelay(pdMS_TO_TICKS(HAPTIC_CAL_SETTLE_MS));
+
+        float rest;
+        err = foc_read_angle(axis->motor, &rest);
+        if (err != ESP_OK) return err;
+
+        /*
+         * Convert the rest angle to a phase within one step
+         * (0 … 2π), then accumulate sin/cos for circular averaging.
+         */
+        float phase = fmodf(rest, axis->step_angle)
+                    / axis->step_angle * two_pi;
+        sum_sin += sinf(phase);
+        sum_cos += cosf(phase);
+    }
+
+    /* Circular mean of the sampled rest phases. */
+    float mean_phase = atan2f(sum_sin, sum_cos);
+    if (mean_phase < 0.0f) mean_phase += two_pi;
+
+    axis->phase_offset = mean_phase / two_pi * axis->step_angle;
+
     return ESP_OK;
 }

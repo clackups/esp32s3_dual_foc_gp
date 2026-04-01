@@ -169,6 +169,10 @@ void app_main(void)
     haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength, s_motor1_dead_zone, s_motor1_smoothing_alpha);
     haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength, s_motor2_dead_zone, s_motor2_smoothing_alpha);
 
+    ESP_LOGI(TAG, "Calibrating haptic detent positions …");
+    ESP_ERROR_CHECK(haptic_calibrate(&s_axis1));
+    ESP_ERROR_CHECK(haptic_calibrate(&s_axis2));
+
     ESP_LOGI(TAG, "Starting USB gamepad …");
     ESP_ERROR_CHECK(usb_gamepad_init());
 
