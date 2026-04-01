@@ -13,8 +13,8 @@
  *  12 slots) has 7 pole pairs. */
 #define FOC_DEFAULT_POLE_PAIRS 7
 
-/** Number of bins in the encoder-nonlinearity correction table.
- *  Populated by foc_calibrate() when it sweeps one mechanical revolution. */
+/** Number of bins in the electrical-angle correction table.
+ *  Populated by foc_calibrate() from a single electrical-cycle sweep. */
 #define FOC_CAL_TABLE_SIZE 128
 
 typedef struct {
@@ -33,11 +33,12 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs);
 
 /**
- * Calibrate the motor: find the electrical zero, then sweep one full
- * mechanical revolution forward and backward to build a correction
- * table that compensates for encoder nonlinearity.  The bidirectional
- * sweep cancels any directional bias from motor inertia.  The motor
- * will energise for several seconds — keep the shaft unloaded.
+ * Calibrate the motor: find the electrical zero, then sweep one
+ * electrical cycle (~51° mechanical) forward and backward to build
+ * a correction table that compensates for motor construction
+ * imperfections.  The bidirectional sweep cancels directional bias
+ * from motor inertia.  The motor will energise briefly — keep the
+ * shaft unloaded.  Total calibration time ~1.2 s per motor.
  */
 esp_err_t foc_calibrate(foc_motor_t *motor);
 
