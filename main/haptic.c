@@ -153,3 +153,35 @@ esp_err_t haptic_calibrate(haptic_axis_t *axis)
 
     return ESP_OK;
 }
+
+/* ── Move to target detent ────────────────────────────────────────── */
+
+/** Duration of the proportional-control settle loop (ms). */
+#define HAPTIC_MOVE_SETTLE_MS 500
+
+esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent)
+{
+    float target = (float)detent * axis->step_angle + axis->phase_offset;
+    float gain   = axis->strength / (axis->step_angle * 0.5f);
+
+    for (int i = 0; i < HAPTIC_MOVE_SETTLE_MS; i++) {
+        float angle;
+        esp_err_t err = foc_read_angle(axis->motor, &angle);
+        if (err != ESP_OK) return err;
+
+        float error = target - angle;
+        if (error >  (float)M_PI) error -= 2.0f * (float)M_PI;
+        if (error < -(float)M_PI) error += 2.0f * (float)M_PI;
+
+        float torque = error * gain;
+        if (torque >  axis->strength) torque =  axis->strength;
+        if (torque < -axis->strength) torque = -axis->strength;
+
+        err = foc_set_torque(axis->motor, torque);
+        if (err != ESP_OK) return err;
+
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+
+    return foc_coast(axis->motor);
+}

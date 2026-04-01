@@ -18,7 +18,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "led_strip.h"
-#include <math.h>
 #include <stdbool.h>
 
 static const char *TAG = "main";
@@ -196,39 +195,9 @@ void app_main(void)
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis1));
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis2));
 
-    /* ── Move both motors to the zeroth detent position ───────────── */
-    ESP_LOGI(TAG, "Moving motors to zero position …");
-    for (int i = 0; i < 500; i++) {    /* 500 ms at 1 ms per tick */
-        float a1, a2;
-        foc_read_angle(&s_foc1, &a1);
-        foc_read_angle(&s_foc2, &a2);
-
-        /* Error toward detent-0 centre, wrapped to −π … +π. */
-        float e1 = s_axis1.phase_offset - a1;
-        if (e1 >  (float)M_PI) e1 -= 2.0f * (float)M_PI;
-        if (e1 < -(float)M_PI) e1 += 2.0f * (float)M_PI;
-
-        float e2 = s_axis2.phase_offset - a2;
-        if (e2 >  (float)M_PI) e2 -= 2.0f * (float)M_PI;
-        if (e2 < -(float)M_PI) e2 += 2.0f * (float)M_PI;
-
-        /* Proportional torque, clamped to ±strength. */
-        float g1 = s_motor1_strength / (s_axis1.step_angle * 0.5f);
-        float t1 = e1 * g1;
-        if (t1 >  s_motor1_strength) t1 =  s_motor1_strength;
-        if (t1 < -s_motor1_strength) t1 = -s_motor1_strength;
-
-        float g2 = s_motor2_strength / (s_axis2.step_angle * 0.5f);
-        float t2 = e2 * g2;
-        if (t2 >  s_motor2_strength) t2 =  s_motor2_strength;
-        if (t2 < -s_motor2_strength) t2 = -s_motor2_strength;
-
-        foc_set_torque(&s_foc1, t1);
-        foc_set_torque(&s_foc2, t2);
-        vTaskDelay(pdMS_TO_TICKS(1));
-    }
-    foc_coast(&s_foc1);
-    foc_coast(&s_foc2);
+    ESP_LOGI(TAG, "Moving motors to centre position …");
+    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis1, s_axis1.steps / 2));
+    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, s_axis2.steps / 2));
 
     /* ── Status LED — green, calibration complete ─────────────────── */
     led_strip_set_pixel(s_status_led, 0, 0, 32, 0);   /* green */
