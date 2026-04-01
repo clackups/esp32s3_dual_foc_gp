@@ -1,5 +1,5 @@
 /*
- * as5600.h — AS5600 12-bit magnetic rotary encoder (I2C) driver.
+ * as5600.h -- AS5600 12-bit magnetic rotary encoder (I2C) driver.
  *
  * Uses the new ESP-IDF I2C master driver (driver/i2c_master.h).
  */
@@ -29,11 +29,11 @@ esp_err_t as5600_init(as5600_t *dev, i2c_port_t port,
                       int sda, int scl, uint32_t freq_hz);
 
 /**
- * Read the raw 12-bit angle (0 – 4095).
+ * Read the raw 12-bit angle (0 - 4095).
  */
 esp_err_t as5600_read_raw(const as5600_t *dev, uint16_t *raw_angle);
 
 /**
- * Read the angle in radians (0 – 2π).
+ * Read the angle in radians (0 - 2pi).
  */
 esp_err_t as5600_read_angle_rad(const as5600_t *dev, float *angle_rad);

@@ -1,5 +1,5 @@
 /*
- * l298n.c — Mini L298N motor driver (3-phase sinusoidal PWM).
+ * l298n.c -- Mini L298N motor driver (3-phase sinusoidal PWM).
  */
 
 #include "l298n.h"
@@ -40,7 +40,7 @@ esp_err_t l298n_init(l298n_t *drv, ledc_timer_t timer,
     drv->ch_in3   = ch_base + 2;
     drv->max_duty = (1U << resolution) - 1;
 
-    /* PWM on IN1–IN3 (three motor phases). */
+    /* PWM on IN1-IN3 (three motor phases). */
     err = init_pwm_channel(drv->ch_in1, timer, in1_gpio);
     if (err != ESP_OK) return err;
     err = init_pwm_channel(drv->ch_in2, timer, in2_gpio);

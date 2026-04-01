@@ -1,5 +1,5 @@
 /*
- * usb_gamepad.c — USB HID gamepad with two 16-bit axes and 10 buttons
+ * usb_gamepad.c -- USB HID gamepad with two 16-bit axes and 10 buttons
  *                 via TinyUSB.
  */
 
@@ -8,13 +8,13 @@
 #include "class/hid/hid_device.h"
 #include <string.h>
 
-/* ── HID report descriptor ──────────────────────────────────────────
+/* -- HID report descriptor ------------------------------------------
  *
  * Report layout (6 bytes total):
- *   byte 0     – buttons 1–8  (bits 0–7)
- *   byte 1     – buttons 9–10 (bits 0–1) + 6-bit padding
- *   bytes 2–3  – X axis (signed 16-bit LE, −32767 … +32767, 0 = centre)
- *   bytes 4–5  – Y axis (signed 16-bit LE, −32767 … +32767, 0 = centre)
+ *   byte 0     - buttons 1-8  (bits 0-7)
+ *   byte 1     - buttons 9-10 (bits 0-1) + 6-bit padding
+ *   bytes 2-3  - X axis (signed 16-bit LE, -32767 ... +32767, 0 = centre)
+ *   bytes 4-5  - Y axis (signed 16-bit LE, -32767 ... +32767, 0 = centre)
  */
 static const uint8_t s_hid_report_desc[] = {
     0x05, 0x01,        /*  Usage Page (Generic Desktop)        */
@@ -42,7 +42,7 @@ static const uint8_t s_hid_report_desc[] = {
     0xA1, 0x00,        /*    Collection (Physical)             */
     0x09, 0x30,        /*      Usage (X)                       */
     0x09, 0x31,        /*      Usage (Y)                       */
-    0x16, 0x01, 0x80,  /*      Logical Minimum (−32767)        */
+    0x16, 0x01, 0x80,  /*      Logical Minimum (-32767)        */
     0x26, 0xFF, 0x7F,  /*      Logical Maximum (32767)         */
     0x75, 0x10,        /*      Report Size (16)                */
     0x95, 0x02,        /*      Report Count (2)                */
@@ -52,7 +52,7 @@ static const uint8_t s_hid_report_desc[] = {
     0xC0               /*  End Collection                      */
 };
 
-/* ── USB configuration descriptor ────────────────────────────────── */
+/* -- USB configuration descriptor ---------------------------------- */
 
 #define TUSB_DESC_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN)
 
@@ -64,7 +64,7 @@ static const uint8_t s_configuration_desc[] = {
                        sizeof(s_hid_report_desc), 0x81, 64, 10),
 };
 
-/* ── TinyUSB descriptor callbacks ────────────────────────────────── */
+/* -- TinyUSB descriptor callbacks ---------------------------------- */
 
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t instance)
 {
@@ -89,7 +89,7 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id,
     (void)buffer;   (void)bufsize;
 }
 
-/* ── Public API ──────────────────────────────────────────────────── */
+/* -- Public API ---------------------------------------------------- */
 
 esp_err_t usb_gamepad_init(void)
 {
@@ -114,8 +114,8 @@ esp_err_t usb_gamepad_report(int16_t axis_x, int16_t axis_y,
     /* Report: 2 bytes buttons (10 bits + 6 padding) + 4 bytes axes
      * (two signed 16-bit little-endian values).                     */
     uint8_t report[6] = {
-        (uint8_t)(buttons & 0xFF),         /* buttons 1–8          */
-        (uint8_t)((buttons >> 8) & 0x03),  /* buttons 9–10 + pad   */
+        (uint8_t)(buttons & 0xFF),         /* buttons 1-8          */
+        (uint8_t)((buttons >> 8) & 0x03),  /* buttons 9-10 + pad   */
         (uint8_t)(axis_x & 0xFF),          /* X low byte           */
         (uint8_t)((axis_x >> 8) & 0xFF),   /* X high byte          */
         (uint8_t)(axis_y & 0xFF),          /* Y low byte           */

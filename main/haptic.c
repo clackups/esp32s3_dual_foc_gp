@@ -1,5 +1,5 @@
 /*
- * haptic.c — Haptic-detent feedback engine.
+ * haptic.c -- Haptic-detent feedback engine.
  */
 
 #include "haptic.h"
@@ -40,17 +40,17 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
     /* Signed angular error from the detent centre. */
     float delta = detent_angle - angle;
 
-    /* Wrap to −π … +π (in practice delta is small). */
+    /* Wrap to -pi ... +pi (in practice delta is small). */
     if (delta >  (float)M_PI) delta -= 2.0f * (float)M_PI;
     if (delta < -(float)M_PI) delta += 2.0f * (float)M_PI;
 
     /*
-     * Torque is proportional to the error, clamped to ±strength.
+     * Torque is proportional to the error, clamped to +/-strength.
      * A dead-zone around the detent centre allows a small region where
      * no restoring torque is applied (neutral position).
      *
      * Outside the dead zone the torque ramps from zero at the dead-zone
-     * boundary to ±strength at half a step-angle.
+     * boundary to +/-strength at half a step-angle.
      */
     float dz_rad = axis->dead_zone * axis->step_angle;
     float abs_delta = (delta >= 0.0f) ? delta : -delta;
@@ -71,8 +71,8 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
 
     /*
      * Exponential moving average smoothing:
-     *   smoothed = α · raw + (1 − α) · previous
-     * α = 1 bypasses smoothing entirely.
+     *   smoothed = alpha * raw + (1 - alpha) * previous
+     * alpha = 1 bypasses smoothing entirely.
      */
     if (prev_torque) {
         torque = axis->smoothing_alpha * torque
@@ -91,9 +91,9 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
     return ESP_OK;
 }
 
-/* ── Haptic calibration ──────────────────────────────────────────── */
+/* -- Haptic calibration -------------------------------------------- */
 
-/** Number of kick–settle measurements during calibration. */
+/** Number of kick-settle measurements during calibration. */
 #define HAPTIC_CAL_SAMPLES   4
 
 /** Normalised torque amplitude for each calibration kick. */
@@ -123,7 +123,7 @@ esp_err_t haptic_calibrate(haptic_axis_t *axis)
         vTaskDelay(pdMS_TO_TICKS(HAPTIC_CAL_KICK_MS));
 
         /*
-         * Coast the motor — let it settle at the nearest cogging
+         * Coast the motor -- let it settle at the nearest cogging
          * position under the rotor magnets' natural pull.
          */
         err = foc_coast(axis->motor);
@@ -136,7 +136,7 @@ esp_err_t haptic_calibrate(haptic_axis_t *axis)
 
         /*
          * Convert the rest angle to a phase within one step
-         * (0 … 2π), then accumulate sin/cos for circular averaging.
+         * (0 ... 2pi), then accumulate sin/cos for circular averaging.
          */
         float rem = fmodf(rest, axis->step_angle);
         if (rem < 0.0f) rem += axis->step_angle;
@@ -154,7 +154,7 @@ esp_err_t haptic_calibrate(haptic_axis_t *axis)
     return ESP_OK;
 }
 
-/* ── Move to target detent ────────────────────────────────────────── */
+/* -- Move to target detent ------------------------------------------ */
 
 /** Duration of the proportional-control settle loop (ms). */
 #define HAPTIC_MOVE_SETTLE_MS 500

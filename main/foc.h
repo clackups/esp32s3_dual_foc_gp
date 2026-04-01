@@ -1,6 +1,6 @@
 /*
- * foc.h — Three-phase field-oriented control for BLDC motors
- *         driven through Mini L298N boards (PWM on IN1–IN3).
+ * foc.h -- Three-phase field-oriented control for BLDC motors
+ *         driven through Mini L298N boards (PWM on IN1-IN3).
  */
 
 #pragma once
@@ -38,10 +38,10 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
 
 /**
  * Calibrate the motor: find the electrical zero, then sweep one
- * electrical cycle (~51° mechanical) forward and backward to build
+ * electrical cycle (~51 deg mechanical) forward and backward to build
  * a correction table that compensates for motor construction
  * imperfections.  The bidirectional sweep cancels directional bias
- * from motor inertia.  The motor will energise briefly — keep the
+ * from motor inertia.  The motor will energise briefly -- keep the
  * shaft unloaded.  Total calibration time ~1.2 s per motor.
  */
 esp_err_t foc_calibrate(foc_motor_t *motor);
@@ -50,7 +50,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor);
  * Apply a torque command to the motor.
  *
  * @param motor   Initialised & calibrated motor.
- * @param torque  Normalised torque (−1.0 … +1.0).
+ * @param torque  Normalised torque (-1.0 ... +1.0).
  * @return ESP_OK on success.
  */
 esp_err_t foc_set_torque(foc_motor_t *motor, float torque);
