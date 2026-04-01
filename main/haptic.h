@@ -27,7 +27,8 @@
 /** Default smoothing factor for exponential moving average on torque.
  *  1.0 = no smoothing (raw torque used directly).
  *  Lower values give heavier smoothing (slower response).
- *  Valid range: 0 (exclusive) to 1 (inclusive). */
+ *  Valid range: 0 (exclusive) to 1 (inclusive); values at or below 0
+ *  are clamped to 0.01. */
 #define HAPTIC_DEFAULT_SMOOTHING_ALPHA 0.5f
 
 typedef struct {
@@ -50,7 +51,8 @@ typedef struct {
  *                  the neutral (detent-centre) position.  0 disables
  *                  the dead zone; values are clamped below 0.5.
  * @param smoothing_alpha  EMA smoothing factor (0 < α ≤ 1).
- *                         1.0 = no smoothing; clamped to (0, 1].
+ *                         1.0 = no smoothing; values ≤ 0 are clamped
+ *                         to 0.01, values > 1 are clamped to 1.
  */
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
                  uint16_t steps, float strength, float dead_zone,
