@@ -124,8 +124,17 @@ static void report_task(void *arg)
         bool periodic = (xTaskGetTickCount() - last_send >= periodic_interval);
 
         if (changed || periodic) {
-            uint8_t x = (uint8_t)((uint32_t)pos1 * 255U / (uint32_t)(s_axis1.steps - 1));
-            uint8_t y = (uint8_t)((uint32_t)pos2 * 255U / (uint32_t)(s_axis2.steps - 1));
+            /* Map position [0, steps−1] → HID axis [0, 255].
+             * Rounded division ensures the centre step maps to exactly
+             * 128 (the documented HID centre), so only one detent
+             * position produces the zero axis value.  Truncation
+             * would place the centre step at 127, pushing it off-zero
+             * and causing two adjacent positions to fall inside the
+             * host dead-zone.                                           */
+            uint32_t d1 = (uint32_t)(s_axis1.steps - 1);
+            uint8_t x = (uint8_t)(((uint32_t)pos1 * 255U + d1 / 2U) / d1);
+            uint32_t d2 = (uint32_t)(s_axis2.steps - 1);
+            uint8_t y = (uint8_t)(((uint32_t)pos2 * 255U + d2 / 2U) / d2);
             usb_gamepad_report(x, y, buttons);
             prev_pos1    = pos1;
             prev_pos2    = pos2;
