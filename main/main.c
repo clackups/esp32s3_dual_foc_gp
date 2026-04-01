@@ -35,6 +35,8 @@ static float    s_motor1_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
 static float    s_motor2_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
 static float    s_motor1_smoothing_alpha = HAPTIC_DEFAULT_SMOOTHING_ALPHA;
 static float    s_motor2_smoothing_alpha = HAPTIC_DEFAULT_SMOOTHING_ALPHA;
+static float    s_motor1_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
+static float    s_motor2_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
 
 /* ── Button GPIO table ─────────────────────────────────────────────── */
 static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
@@ -182,8 +184,8 @@ void app_main(void)
                                MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
 
     ESP_LOGI(TAG, "Calibrating FOC …");
-    foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS);
-    foc_init(&s_foc2, &s_enc2, &s_drv2, MOTOR_POLE_PAIRS);
+    foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS, s_motor1_angle_offset);
+    foc_init(&s_foc2, &s_enc2, &s_drv2, MOTOR_POLE_PAIRS, s_motor2_angle_offset);
     ESP_ERROR_CHECK(foc_calibrate(&s_foc1));
     ESP_LOGI(TAG, "Zero angle #1: %f", s_foc1.zero_electrical_angle);
     ESP_ERROR_CHECK(foc_calibrate(&s_foc2));
