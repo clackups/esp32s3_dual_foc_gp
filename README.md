@@ -28,16 +28,16 @@ changed there without modifying any other file.
 | MOTOR1_IN1  | 1  | Motor 1 coil U - Mini L298N IN1 (PWM) |
 | MOTOR1_IN2  | 2  | Motor 1 coil V - Mini L298N IN2 (PWM) |
 | MOTOR1_IN3  | 3  | Motor 1 coil W - Mini L298N IN3 (PWM) |
-| MOTOR2_IN1  | 6  | Motor 2 coil U - Mini L298N IN1 (PWM) |
-| MOTOR2_IN2  | 7  | Motor 2 coil V - Mini L298N IN2 (PWM) |
-| MOTOR2_IN3  | 8  | Motor 2 coil W - Mini L298N IN3 (PWM) |
+| MOTOR2_IN1  | 15 | Motor 2 coil U - Mini L298N IN1 (PWM) |
+| MOTOR2_IN2  | 16 | Motor 2 coil V - Mini L298N IN2 (PWM) |
+| MOTOR2_IN3  | 17 | Motor 2 coil W - Mini L298N IN3 (PWM) |
 | BUTTON1     | 4  | Game controller button 1 (active-low)  |
 | BUTTON2     | 5  | Game controller button 2 (active-low)  |
 | BUTTON3     | 13 | Game controller button 3 (active-low)  |
 | BUTTON4     | 14 | Game controller button 4 (active-low)  |
-| BUTTON5     | 15 | Game controller button 5 (active-low)  |
-| BUTTON6     | 16 | Game controller button 6 (active-low)  |
-| BUTTON7     | 17 | Game controller button 7 (active-low)  |
+| BUTTON5     | 6  | Game controller button 5 (active-low)  |
+| BUTTON6     | 7  | Game controller button 6 (active-low)  |
+| BUTTON7     | 8  | Game controller button 7 (active-low)  |
 | BUTTON8     | 18 | Game controller button 8 (active-low)  |
 | BUTTON9     | 21 | Game controller button 9 (active-low)  |
 | BUTTON10    | 38 | Game controller button 10 (active-low) |
@@ -45,6 +45,7 @@ changed there without modifying any other file.
 | ENCODER1_SCL | 10 | AS5600 #1 - I2C SCL |
 | ENCODER2_SDA | 11 | AS5600 #2 - I2C SDA |
 | ENCODER2_SCL | 12 | AS5600 #2 - I2C SCL |
+| STATUS_LED  | 48 | WS2812 status LED                      |
 
 USB D-/D+ use the ESP32-S3 native USB-OTG pins (GPIO 19/20) and
 require no additional configuration.
