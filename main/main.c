@@ -32,6 +32,8 @@ static float    s_motor1_strength = HAPTIC_DEFAULT_STRENGTH;
 static float    s_motor2_strength = HAPTIC_DEFAULT_STRENGTH;
 static float    s_motor1_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
 static float    s_motor2_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
+static float    s_motor1_smoothing_alpha = HAPTIC_DEFAULT_SMOOTHING_ALPHA;
+static float    s_motor2_smoothing_alpha = HAPTIC_DEFAULT_SMOOTHING_ALPHA;
 
 /* ── Button GPIO table ─────────────────────────────────────────────── */
 static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
@@ -56,9 +58,10 @@ static TaskHandle_t      s_report_task_handle;
 static void haptic1_task(void *arg)
 {
     (void)arg;
+    float prev_torque = 0.0f;
     for (;;) {
         uint16_t pos = 0;
-        haptic_update(&s_axis1, &pos);
+        haptic_update(&s_axis1, &pos, &prev_torque);
         s_pos1 = pos;
         xTaskNotifyGive(s_report_task_handle);
     }
@@ -68,9 +71,10 @@ static void haptic1_task(void *arg)
 static void haptic2_task(void *arg)
 {
     (void)arg;
+    float prev_torque = 0.0f;
     for (;;) {
         uint16_t pos = 0;
-        haptic_update(&s_axis2, &pos);
+        haptic_update(&s_axis2, &pos, &prev_torque);
         s_pos2 = pos;
         xTaskNotifyGive(s_report_task_handle);
     }
@@ -162,8 +166,8 @@ void app_main(void)
     ESP_ERROR_CHECK(foc_calibrate(&s_foc2));
 
     ESP_LOGI(TAG, "Setting up haptic axes …");
-    haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength, s_motor1_dead_zone);
-    haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength, s_motor2_dead_zone);
+    haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength, s_motor1_dead_zone, s_motor1_smoothing_alpha);
+    haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength, s_motor2_dead_zone, s_motor2_smoothing_alpha);
 
     ESP_LOGI(TAG, "Starting USB gamepad …");
     ESP_ERROR_CHECK(usb_gamepad_init());

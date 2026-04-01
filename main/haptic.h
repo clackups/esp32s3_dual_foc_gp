@@ -24,12 +24,19 @@
  *  Valid range: 0 (disabled) to just below 0.5. */
 #define HAPTIC_DEFAULT_DEAD_ZONE 0.1f
 
+/** Default smoothing factor for exponential moving average on torque.
+ *  1.0 = no smoothing (raw torque used directly).
+ *  Lower values give heavier smoothing (slower response).
+ *  Valid range: 0 (exclusive) to 1 (inclusive). */
+#define HAPTIC_DEFAULT_SMOOTHING_ALPHA 0.5f
+
 typedef struct {
     foc_motor_t *motor;
-    uint16_t     steps;       /* detent positions per revolution */
-    float        strength;    /* peak normalised torque (0 – 1)  */
-    float        step_angle;  /* 2π / steps (computed)           */
-    float        dead_zone;   /* fraction of step_angle (0–<0.5) */
+    uint16_t     steps;            /* detent positions per revolution  */
+    float        strength;         /* peak normalised torque (0 – 1)   */
+    float        step_angle;       /* 2π / steps (computed)            */
+    float        dead_zone;        /* fraction of step_angle (0–<0.5)  */
+    float        smoothing_alpha;  /* EMA factor (0 < α ≤ 1)           */
 } haptic_axis_t;
 
 /**
@@ -42,9 +49,12 @@ typedef struct {
  * @param dead_zone Fraction of one step angle that is still treated as
  *                  the neutral (detent-centre) position.  0 disables
  *                  the dead zone; values are clamped below 0.5.
+ * @param smoothing_alpha  EMA smoothing factor (0 < α ≤ 1).
+ *                         1.0 = no smoothing; clamped to (0, 1].
  */
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
-                 uint16_t steps, float strength, float dead_zone);
+                 uint16_t steps, float strength, float dead_zone,
+                 float smoothing_alpha);
 
 /**
  * Run one tick of the haptic loop: read angle, compute nearest detent,
@@ -55,6 +65,11 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
  * @param axis  Initialised axis.
  * @param[out] position  If non-NULL, receives the current step index
  *                       (0 … steps−1).
+ * @param[in,out] prev_torque  Pointer to the previous smoothed torque.
+ *                             Read for EMA input, written with the new
+ *                             smoothed value.  Caller should initialise
+ *                             to 0 before the first call.
  * @return ESP_OK on success.
  */
-esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position);
+esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
+                        float *prev_torque);
