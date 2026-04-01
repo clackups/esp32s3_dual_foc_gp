@@ -34,9 +34,10 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
 
 /**
  * Calibrate the motor: find the electrical zero, then sweep one full
- * mechanical revolution to build a correction table that compensates
- * for encoder nonlinearity.  The motor will energise for several
- * seconds — keep the shaft unloaded.
+ * mechanical revolution forward and backward to build a correction
+ * table that compensates for encoder nonlinearity.  The bidirectional
+ * sweep cancels any directional bias from motor inertia.  The motor
+ * will energise for several seconds — keep the shaft unloaded.
  */
 esp_err_t foc_calibrate(foc_motor_t *motor);
 
