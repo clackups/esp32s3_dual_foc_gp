@@ -126,7 +126,7 @@ esp_err_t haptic_calibrate(haptic_axis_t *axis)
          * Coast the motor — let it settle at the nearest cogging
          * position under the rotor magnets' natural pull.
          */
-        err = l298n_coast(axis->motor->driver);
+        err = foc_coast(axis->motor);
         if (err != ESP_OK) return err;
         vTaskDelay(pdMS_TO_TICKS(HAPTIC_CAL_SETTLE_MS));
 
@@ -138,8 +138,9 @@ esp_err_t haptic_calibrate(haptic_axis_t *axis)
          * Convert the rest angle to a phase within one step
          * (0 … 2π), then accumulate sin/cos for circular averaging.
          */
-        float phase = fmodf(rest, axis->step_angle)
-                    / axis->step_angle * two_pi;
+        float rem = fmodf(rest, axis->step_angle);
+        if (rem < 0.0f) rem += axis->step_angle;
+        float phase = rem / axis->step_angle * two_pi;
         sum_sin += sinf(phase);
         sum_cos += cosf(phase);
     }

@@ -150,6 +150,11 @@ esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
     return l298n_set_three_phase(motor->driver, du, dv, dw);
 }
 
+esp_err_t foc_coast(foc_motor_t *motor)
+{
+    return l298n_coast(motor->driver);
+}
+
 esp_err_t foc_read_angle(const foc_motor_t *motor, float *angle_rad)
 {
     return as5600_read_angle_rad(motor->encoder, angle_rad);

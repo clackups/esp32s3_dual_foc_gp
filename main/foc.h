@@ -50,6 +50,11 @@ esp_err_t foc_calibrate(foc_motor_t *motor);
 esp_err_t foc_set_torque(foc_motor_t *motor, float torque);
 
 /**
+ * Coast the motor (de-energise all phases).
+ */
+esp_err_t foc_coast(foc_motor_t *motor);
+
+/**
  * Read the current mechanical angle in radians.
  */
 esp_err_t foc_read_angle(const foc_motor_t *motor, float *angle_rad);
