@@ -1,5 +1,5 @@
 /*
- * usb_gamepad.c — USB HID gamepad with two 8-bit axes and 10 buttons
+ * usb_gamepad.c — USB HID gamepad with two 16-bit axes and 10 buttons
  *                 via TinyUSB.
  */
 
@@ -10,11 +10,11 @@
 
 /* ── HID report descriptor ──────────────────────────────────────────
  *
- * Report layout (4 bytes total):
+ * Report layout (6 bytes total):
  *   byte 0     – buttons 1–8  (bits 0–7)
  *   byte 1     – buttons 9–10 (bits 0–1) + 6-bit padding
- *   byte 2     – X axis (0–255)
- *   byte 3     – Y axis (0–255)
+ *   bytes 2–3  – X axis (signed 16-bit LE, −32767 … +32767, 0 = centre)
+ *   bytes 4–5  – Y axis (signed 16-bit LE, −32767 … +32767, 0 = centre)
  */
 static const uint8_t s_hid_report_desc[] = {
     0x05, 0x01,        /*  Usage Page (Generic Desktop)        */
@@ -36,15 +36,15 @@ static const uint8_t s_hid_report_desc[] = {
     0x95, 0x06,        /*    Report Count (6)                  */
     0x81, 0x01,        /*    Input (Const)                     */
 
-    /* X and Y axes */
+    /* X and Y axes (signed 16-bit) */
     0x05, 0x01,        /*    Usage Page (Generic Desktop)      */
     0x09, 0x01,        /*    Usage (Pointer)                   */
     0xA1, 0x00,        /*    Collection (Physical)             */
     0x09, 0x30,        /*      Usage (X)                       */
     0x09, 0x31,        /*      Usage (Y)                       */
-    0x15, 0x00,        /*      Logical Minimum (0)             */
-    0x26, 0xFF, 0x00,  /*      Logical Maximum (255)           */
-    0x75, 0x08,        /*      Report Size (8)                 */
+    0x16, 0x01, 0x80,  /*      Logical Minimum (−32767)        */
+    0x26, 0xFF, 0x7F,  /*      Logical Maximum (32767)         */
+    0x75, 0x10,        /*      Report Size (16)                */
     0x95, 0x02,        /*      Report Count (2)                */
     0x81, 0x02,        /*      Input (Data, Var, Abs)          */
     0xC0,              /*    End Collection                    */
@@ -104,19 +104,22 @@ esp_err_t usb_gamepad_init(void)
     return tinyusb_driver_install(&tusb_cfg);
 }
 
-esp_err_t usb_gamepad_report(uint8_t axis_x, uint8_t axis_y,
+esp_err_t usb_gamepad_report(int16_t axis_x, int16_t axis_y,
                             uint16_t buttons)
 {
     if (!tud_hid_ready()) {
         return ESP_ERR_NOT_FINISHED;
     }
 
-    /* Report: 2 bytes buttons (10 bits + 6 padding) + 2 bytes axes. */
-    uint8_t report[4] = {
+    /* Report: 2 bytes buttons (10 bits + 6 padding) + 4 bytes axes
+     * (two signed 16-bit little-endian values).                     */
+    uint8_t report[6] = {
         (uint8_t)(buttons & 0xFF),         /* buttons 1–8          */
         (uint8_t)((buttons >> 8) & 0x03),  /* buttons 9–10 + pad   */
-        axis_x,
-        axis_y,
+        (uint8_t)(axis_x & 0xFF),          /* X low byte           */
+        (uint8_t)((axis_x >> 8) & 0xFF),   /* X high byte          */
+        (uint8_t)(axis_y & 0xFF),          /* Y low byte           */
+        (uint8_t)((axis_y >> 8) & 0xFF),   /* Y high byte          */
     };
     if (!tud_hid_report(0, report, sizeof(report))) {
         return ESP_FAIL;

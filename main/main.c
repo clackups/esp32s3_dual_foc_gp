@@ -27,14 +27,16 @@ static const char *TAG = "main";
 
 /* Steps and strength are runtime variables so they can be made
  * configurable later (e.g. via NVS or USB commands).               */
-static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
-static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
+static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 21 */
+static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 21 */
 static float    s_motor1_strength = HAPTIC_DEFAULT_STRENGTH;
 static float    s_motor2_strength = HAPTIC_DEFAULT_STRENGTH;
 static float    s_motor1_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
 static float    s_motor2_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
 static float    s_motor1_smoothing_alpha = HAPTIC_DEFAULT_SMOOTHING_ALPHA;
 static float    s_motor2_smoothing_alpha = HAPTIC_DEFAULT_SMOOTHING_ALPHA;
+static float    s_motor1_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
+static float    s_motor2_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
 
 /* ── Button GPIO table ─────────────────────────────────────────────── */
 static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
@@ -55,6 +57,11 @@ static volatile uint16_t s_pos1;
 static volatile uint16_t s_pos2;
 static volatile uint16_t s_buttons;
 static TaskHandle_t      s_report_task_handle;
+
+/* Centre position for each axis (steps / 2).  The HID report sends the
+ * signed deviation from this midpoint, scaled to ±32767.               */
+static uint16_t s_pos1_middle;
+static uint16_t s_pos2_middle;
 
 /* ── Haptic task for axis 1 (runs as fast as possible) ────────────── */
 static void haptic1_task(void *arg)
@@ -122,9 +129,26 @@ static void report_task(void *arg)
         bool periodic = (xTaskGetTickCount() - last_send >= periodic_interval);
 
         if (changed || periodic) {
-            uint8_t x = (uint8_t)((uint32_t)pos1 * 255U / (uint32_t)(s_axis1.steps - 1));
-            uint8_t y = (uint8_t)((uint32_t)pos2 * 255U / (uint32_t)(s_axis2.steps - 1));
-            usb_gamepad_report(x, y, buttons);
+            /* Map position deviation from middle to signed 16-bit HID
+             * axis (−32767 … +32767).  The centre detent (pos == middle)
+             * maps to exactly 0, so the host sees a true zero with no
+             * rounding artefacts.
+             *
+             * half = steps / 2 (equal to middle for odd step counts).
+             * val  = (pos − middle) * 32767 / half, clamped to ±32767. */
+            int32_t half1 = (int32_t)(s_axis1.steps / 2);
+            int32_t dev1  = (int32_t)pos1 - (int32_t)s_pos1_middle;
+            int32_t v1    = (half1 > 0) ? (dev1 * 32767 / half1) : 0;
+            if (v1 >  32767) v1 =  32767;
+            if (v1 < -32767) v1 = -32767;
+
+            int32_t half2 = (int32_t)(s_axis2.steps / 2);
+            int32_t dev2  = (int32_t)pos2 - (int32_t)s_pos2_middle;
+            int32_t v2    = (half2 > 0) ? (dev2 * 32767 / half2) : 0;
+            if (v2 >  32767) v2 =  32767;
+            if (v2 < -32767) v2 = -32767;
+
+            usb_gamepad_report((int16_t)v1, (int16_t)v2, buttons);
             prev_pos1    = pos1;
             prev_pos2    = pos2;
             prev_buttons = buttons;
@@ -182,8 +206,8 @@ void app_main(void)
                                MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
 
     ESP_LOGI(TAG, "Calibrating FOC …");
-    foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS);
-    foc_init(&s_foc2, &s_enc2, &s_drv2, MOTOR_POLE_PAIRS);
+    foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS, s_motor1_angle_offset);
+    foc_init(&s_foc2, &s_enc2, &s_drv2, MOTOR_POLE_PAIRS, s_motor2_angle_offset);
     ESP_ERROR_CHECK(foc_calibrate(&s_foc1));
     ESP_LOGI(TAG, "Zero angle #1: %f", s_foc1.zero_electrical_angle);
     ESP_ERROR_CHECK(foc_calibrate(&s_foc2));
@@ -197,9 +221,13 @@ void app_main(void)
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis1));
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis2));
 
+    /* Compute and store the centre detent index for HID reporting. */
+    s_pos1_middle = s_axis1.steps / 2;
+    s_pos2_middle = s_axis2.steps / 2;
+
     ESP_LOGI(TAG, "Moving motors to centre position …");
-    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis1, s_axis1.steps / 2));
-    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, s_axis2.steps / 2));
+    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis1, s_pos1_middle));
+    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, s_pos2_middle));
 
     /* ── Status LED — green, calibration complete ─────────────────── */
     led_strip_set_pixel(s_status_led, 0, 0, 32, 0);   /* green */

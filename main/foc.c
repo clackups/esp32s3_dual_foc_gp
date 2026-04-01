@@ -43,13 +43,32 @@
 #define CAL_SETTLE_MS     60
 
 void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
-              uint8_t pole_pairs)
+              uint8_t pole_pairs, float angle_offset)
 {
     motor->encoder               = encoder;
     motor->driver                = driver;
     motor->pole_pairs            = pole_pairs;
+    motor->angle_offset          = angle_offset;
     motor->zero_electrical_angle = 0.0f;
     memset(motor->cal_table, 0, sizeof(motor->cal_table));
+}
+
+/* -----------------------------------------------------------------
+ * Helper: read the AS5600 angle and apply the manual mounting offset.
+ * Result is wrapped to [0, 2π).  fmodf(x, 2π) always returns a
+ * value in (−2π, 2π), so one conditional addition suffices for any
+ * offset magnitude.
+ * ----------------------------------------------------------------- */
+static esp_err_t read_corrected_angle(const foc_motor_t *motor,
+                                      float *angle_rad)
+{
+    esp_err_t err = as5600_read_angle_rad(motor->encoder, angle_rad);
+    if (err != ESP_OK) return err;
+    float a = fmodf(*angle_rad + motor->angle_offset,
+                     2.0f * (float)M_PI);
+    if (a < 0.0f) a += 2.0f * (float)M_PI;
+    *angle_rad = a;
+    return ESP_OK;
 }
 
 /* -----------------------------------------------------------------
@@ -85,7 +104,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     vTaskDelay(pdMS_TO_TICKS(500));
 
     float angle;
-    err = as5600_read_angle_rad(motor->encoder, &angle);
+    err = read_corrected_angle(motor, &angle);
     if (err != ESP_OK) {
         l298n_coast(motor->driver);
         return err;
@@ -126,7 +145,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         vTaskDelay(pdMS_TO_TICKS(CAL_SETTLE_MS));
 
         float mech;
-        err = as5600_read_angle_rad(motor->encoder, &mech);
+        err = read_corrected_angle(motor, &mech);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
             l298n_coast(motor->driver);
@@ -153,7 +172,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         vTaskDelay(pdMS_TO_TICKS(CAL_SETTLE_MS));
 
         float mech;
-        err = as5600_read_angle_rad(motor->encoder, &mech);
+        err = read_corrected_angle(motor, &mech);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
             l298n_coast(motor->driver);
@@ -187,7 +206,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
 esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
 {
     float mech_angle;
-    esp_err_t err = as5600_read_angle_rad(motor->encoder, &mech_angle);
+    esp_err_t err = read_corrected_angle(motor, &mech_angle);
     if (err != ESP_OK) return err;
 
     float elec_angle = fmodf(mech_angle * motor->pole_pairs, 2.0f * (float)M_PI)
@@ -229,5 +248,5 @@ esp_err_t foc_coast(foc_motor_t *motor)
 
 esp_err_t foc_read_angle(const foc_motor_t *motor, float *angle_rad)
 {
-    return as5600_read_angle_rad(motor->encoder, angle_rad);
+    return read_corrected_angle(motor, angle_rad);
 }

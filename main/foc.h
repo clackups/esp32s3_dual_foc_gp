@@ -21,6 +21,7 @@ typedef struct {
     as5600_t *encoder;
     l298n_t  *driver;
     uint8_t   pole_pairs;
+    float     angle_offset;                     /* manual magnet-mounting offset (rad) */
     float     zero_electrical_angle;            /* calibration offset (rad) */
     float     cal_table[FOC_CAL_TABLE_SIZE];    /* per-bin elec. angle correction */
 } foc_motor_t;
@@ -28,9 +29,12 @@ typedef struct {
 /**
  * Initialise and link an encoder + driver pair.
  * Call after as5600_init() and l298n_init().
+ *
+ * @param angle_offset  Signed magnet-mounting offset in radians,
+ *                      added to every raw AS5600 reading.
  */
 void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
-              uint8_t pole_pairs);
+              uint8_t pole_pairs, float angle_offset);
 
 /**
  * Calibrate the motor: find the electrical zero, then sweep one
