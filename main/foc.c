@@ -40,7 +40,7 @@
 #define CAL_ELEC_STEPS    6
 
 /* Milliseconds to let the rotor settle at each alignment point. */
-#define CAL_SETTLE_MS     60
+#define CAL_SETTLE_MS     300
 
 void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs, float angle_offset)
@@ -90,7 +90,7 @@ static esp_err_t set_field(const l298n_t *drv, uint32_t half,
 esp_err_t foc_calibrate(foc_motor_t *motor)
 {
     uint32_t half = motor->driver->max_duty / 2;
-    float cal_amplitude = 0.85f;
+    float cal_amplitude = 0.95f;
     float two_pi = 2.0f * (float)M_PI;
     float pp     = (float)motor->pole_pairs;
 
