@@ -195,9 +195,9 @@ void app_main(void)
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis1));
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis2));
 
-    ESP_LOGI(TAG, "Moving motors to zero position …");
-    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis1, 0));
-    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, 0));
+    ESP_LOGI(TAG, "Moving motors to centre position …");
+    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis1, s_axis1.steps / 2));
+    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, s_axis2.steps / 2));
 
     /* ── Status LED — green, calibration complete ─────────────────── */
     led_strip_set_pixel(s_status_led, 0, 0, 32, 0);   /* green */
