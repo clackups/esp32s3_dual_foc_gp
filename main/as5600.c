@@ -1,5 +1,5 @@
 /*
- * as5600.c — AS5600 12-bit magnetic rotary encoder (I2C) driver.
+ * as5600.c -- AS5600 12-bit magnetic rotary encoder (I2C) driver.
  *
  * Uses the new ESP-IDF I2C master driver (driver/i2c_master.h).
  */

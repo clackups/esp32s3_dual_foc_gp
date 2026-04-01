@@ -25,12 +25,12 @@ changed there without modifying any other file.
 
 | Signal | GPIO | Description |
 |--------|------|-------------|
-| MOTOR1_IN1  | 1  | Motor 1 coil U – Mini L298N IN1 (PWM) |
-| MOTOR1_IN2  | 2  | Motor 1 coil V – Mini L298N IN2 (PWM) |
-| MOTOR1_IN3  | 3  | Motor 1 coil W – Mini L298N IN3 (PWM) |
-| MOTOR2_IN1  | 6  | Motor 2 coil U – Mini L298N IN1 (PWM) |
-| MOTOR2_IN2  | 7  | Motor 2 coil V – Mini L298N IN2 (PWM) |
-| MOTOR2_IN3  | 8  | Motor 2 coil W – Mini L298N IN3 (PWM) |
+| MOTOR1_IN1  | 1  | Motor 1 coil U - Mini L298N IN1 (PWM) |
+| MOTOR1_IN2  | 2  | Motor 1 coil V - Mini L298N IN2 (PWM) |
+| MOTOR1_IN3  | 3  | Motor 1 coil W - Mini L298N IN3 (PWM) |
+| MOTOR2_IN1  | 6  | Motor 2 coil U - Mini L298N IN1 (PWM) |
+| MOTOR2_IN2  | 7  | Motor 2 coil V - Mini L298N IN2 (PWM) |
+| MOTOR2_IN3  | 8  | Motor 2 coil W - Mini L298N IN3 (PWM) |
 | BUTTON1     | 4  | Game controller button 1 (active-low)  |
 | BUTTON2     | 5  | Game controller button 2 (active-low)  |
 | BUTTON3     | 13 | Game controller button 3 (active-low)  |
@@ -41,32 +41,32 @@ changed there without modifying any other file.
 | BUTTON8     | 18 | Game controller button 8 (active-low)  |
 | BUTTON9     | 21 | Game controller button 9 (active-low)  |
 | BUTTON10    | 38 | Game controller button 10 (active-low) |
-| ENCODER1_SDA | 9 | AS5600 #1 – I2C SDA |
-| ENCODER1_SCL | 10 | AS5600 #1 – I2C SCL |
-| ENCODER2_SDA | 11 | AS5600 #2 – I2C SDA |
-| ENCODER2_SCL | 12 | AS5600 #2 – I2C SCL |
+| ENCODER1_SDA | 9 | AS5600 #1 - I2C SDA |
+| ENCODER1_SCL | 10 | AS5600 #1 - I2C SCL |
+| ENCODER2_SDA | 11 | AS5600 #2 - I2C SDA |
+| ENCODER2_SCL | 12 | AS5600 #2 - I2C SCL |
 
-USB D−/D+ use the ESP32-S3 native USB-OTG pins (GPIO 19/20) and
+USB D-/D+ use the ESP32-S3 native USB-OTG pins (GPIO 19/20) and
 require no additional configuration.
 
-### Motor wiring (2804 BLDC — 3 coil inputs)
+### Motor wiring (2804 BLDC -- 3 coil inputs)
 
 Each 2804 motor has three coil wires (U, V, W).  A single Mini L298N
-drives the three motor coils via IN1–IN3:
+drives the three motor coils via IN1-IN3:
 
 ```
-  IN1 (PWM) ──► OUT1 ──► Coil U
-  IN2 (PWM) ──► OUT2 ──► Coil V
-  IN3 (PWM) ──► OUT3 ──► Coil W
+  IN1 (PWM) --> OUT1 --> Coil U
+  IN2 (PWM) --> OUT2 --> Coil V
+  IN3 (PWM) --> OUT3 --> Coil W
 ```
 
-The firmware drives all three coils with sinusoidal PWM (120° apart)
+The firmware drives all three coils with sinusoidal PWM (120 deg apart)
 to create a rotating magnetic field.  This true three-phase drive
 produces smoother torque than a two-phase approximation.
 
 ## Software prerequisites
 
-* **ESP-IDF v5.x** — [installation guide](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/)
+* **ESP-IDF v5.x** -- [installation guide](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/)
 * The project pulls `espressif/esp_tinyusb` automatically from the
   IDF Component Registry on first build.
 
@@ -99,7 +99,7 @@ static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
 
 ### Haptic feedback strength
 
-Peak normalised torque for the detent effect (0 – 1).  Adjust per-axis
+Peak normalised torque for the detent effect (0 - 1).  Adjust per-axis
 in **`main/main.c`**:
 
 ```c
@@ -115,43 +115,43 @@ it per-motor in `main/main.c` if you use a different motor.
 
 ### GPIO assignments
 
-Edit **`main/pin_config.h`** — every hardware pin is a `#define` in
+Edit **`main/pin_config.h`** -- every hardware pin is a `#define` in
 that one file.
 
 ## Project structure
 
 ```
-├── CMakeLists.txt          Top-level ESP-IDF project file
-├── sdkconfig.defaults      Default Kconfig settings (target, USB)
-├── README.md               This file
-└── main/
-    ├── CMakeLists.txt      Component registration
-    ├── idf_component.yml   IDF Component Registry dependencies
-    ├── pin_config.h        *** All GPIO assignments ***
-    ├── as5600.h / .c       AS5600 I2C encoder driver
-    ├── l298n.h / .c        Mini L298N PWM motor driver (3-phase)
-    ├── foc.h / .c          Three-phase sinusoidal FOC
-    ├── haptic.h / .c       Haptic detent engine
-    ├── usb_gamepad.h / .c  USB HID gamepad (TinyUSB)
-    └── main.c              Application entry point
+|-- CMakeLists.txt          Top-level ESP-IDF project file
+|-- sdkconfig.defaults      Default Kconfig settings (target, USB)
+|-- README.md               This file
+`-- main/
+    |-- CMakeLists.txt      Component registration
+    |-- idf_component.yml   IDF Component Registry dependencies
+    |-- pin_config.h        *** All GPIO assignments ***
+    |-- as5600.h / .c       AS5600 I2C encoder driver
+    |-- l298n.h / .c        Mini L298N PWM motor driver (3-phase)
+    |-- foc.h / .c          Three-phase sinusoidal FOC
+    |-- haptic.h / .c       Haptic detent engine
+    |-- usb_gamepad.h / .c  USB HID gamepad (TinyUSB)
+    `-- main.c              Application entry point
 ```
 
 ## How it works
 
-1. **Encoder reading** — Each AS5600 provides a 12-bit absolute angle
+1. **Encoder reading** -- Each AS5600 provides a 12-bit absolute angle
    over I2C.  Two separate I2C buses are used because the AS5600 has a
    fixed address (0x36).
 
-2. **FOC torque control** — A three-phase FOC algorithm converts a
-   desired torque command into sinusoidal phase voltages (120° apart)
+2. **FOC torque control** -- A three-phase FOC algorithm converts a
+   desired torque command into sinusoidal phase voltages (120 deg apart)
    for the 2804 motor's coils U, V, and W.  The Mini L298N drives
-   all three phases via PWM on IN1–IN3.
+   all three phases via PWM on IN1-IN3.
 
-3. **Haptic detents** — The haptic engine divides one full rotation
+3. **Haptic detents** -- The haptic engine divides one full rotation
    into N equal steps and applies a spring-like restoring torque toward
    the nearest detent centre.
 
-4. **USB HID** — The current detent index of each axis is mapped to an
+4. **USB HID** -- The current detent index of each axis is mapped to an
    8-bit value and sent to the host as a standard USB gamepad report.
 
 ## License

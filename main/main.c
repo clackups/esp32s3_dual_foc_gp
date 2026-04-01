@@ -1,5 +1,5 @@
 /*
- * main.c — Dual-FOC haptic USB gamepad application entry point.
+ * main.c -- Dual-FOC haptic USB gamepad application entry point.
  *
  * Two 2804 BLDC motors (3 coil inputs, 7 pole pairs) with AS5600
  * encoders provide force-feedback detents.  The angular positions are
@@ -22,7 +22,7 @@
 
 static const char *TAG = "main";
 
-/* ── Per-axis configuration ────────────────────────────────────────── */
+/* -- Per-axis configuration ------------------------------------------ */
 #define MOTOR_POLE_PAIRS  FOC_DEFAULT_POLE_PAIRS
 
 /* Steps and strength are runtime variables so they can be made
@@ -38,32 +38,32 @@ static float    s_motor2_smoothing_alpha = HAPTIC_DEFAULT_SMOOTHING_ALPHA;
 static float    s_motor1_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
 static float    s_motor2_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
 
-/* ── Button GPIO table ─────────────────────────────────────────────── */
+/* -- Button GPIO table ----------------------------------------------- */
 static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
     BUTTON1_GPIO,  BUTTON2_GPIO,  BUTTON3_GPIO,  BUTTON4_GPIO,
     BUTTON5_GPIO,  BUTTON6_GPIO,  BUTTON7_GPIO,  BUTTON8_GPIO,
     BUTTON9_GPIO,  BUTTON10_GPIO,
 };
 
-/* ── Hardware instances ────────────────────────────────────────────── */
+/* -- Hardware instances ---------------------------------------------- */
 static as5600_t      s_enc1, s_enc2;
 static l298n_t       s_drv1, s_drv2;
 static foc_motor_t   s_foc1, s_foc2;
 static haptic_axis_t s_axis1, s_axis2;
 static led_strip_handle_t s_status_led;
 
-/* ── Shared state (written by individual tasks, read by report task) ── */
+/* -- Shared state (written by individual tasks, read by report task) -- */
 static volatile uint16_t s_pos1;
 static volatile uint16_t s_pos2;
 static volatile uint16_t s_buttons;
 static TaskHandle_t      s_report_task_handle;
 
 /* Centre position for each axis (steps / 2).  The HID report sends the
- * signed deviation from this midpoint, scaled to ±32767.               */
+ * signed deviation from this midpoint, scaled to +/-32767.               */
 static uint16_t s_pos1_middle;
 static uint16_t s_pos2_middle;
 
-/* ── Haptic task for axis 1 (runs as fast as possible) ────────────── */
+/* -- Haptic task for axis 1 (runs as fast as possible) -------------- */
 static void haptic1_task(void *arg)
 {
     (void)arg;
@@ -76,7 +76,7 @@ static void haptic1_task(void *arg)
     }
 }
 
-/* ── Haptic task for axis 2 (runs as fast as possible) ────────────── */
+/* -- Haptic task for axis 2 (runs as fast as possible) -------------- */
 static void haptic2_task(void *arg)
 {
     (void)arg;
@@ -89,7 +89,7 @@ static void haptic2_task(void *arg)
     }
 }
 
-/* ── Button polling task (~1 kHz) ─────────────────────────────────── */
+/* -- Button polling task (~1 kHz) ----------------------------------- */
 static void button_task(void *arg)
 {
     (void)arg;
@@ -108,7 +108,7 @@ static void button_task(void *arg)
     }
 }
 
-/* ── USB HID report task (sends on change + every 100 ms) ─────────── */
+/* -- USB HID report task (sends on change + every 100 ms) ----------- */
 static void report_task(void *arg)
 {
     (void)arg;
@@ -130,12 +130,12 @@ static void report_task(void *arg)
 
         if (changed || periodic) {
             /* Map position deviation from middle to signed 16-bit HID
-             * axis (−32767 … +32767).  The centre detent (pos == middle)
+             * axis (-32767 ... +32767).  The centre detent (pos == middle)
              * maps to exactly 0, so the host sees a true zero with no
              * rounding artefacts.
              *
              * half = steps / 2 (equal to middle for odd step counts).
-             * val  = (pos − middle) * 32767 / half, clamped to ±32767. */
+             * val  = (pos - middle) * 32767 / half, clamped to +/-32767. */
             int32_t half1 = (int32_t)(s_axis1.steps / 2);
             int32_t dev1  = (int32_t)pos1 - (int32_t)s_pos1_middle;
             int32_t v1    = (half1 > 0) ? (dev1 * 32767 / half1) : 0;
@@ -157,10 +157,10 @@ static void report_task(void *arg)
     }
 }
 
-/* ── Application entry point ──────────────────────────────────────── */
+/* -- Application entry point ---------------------------------------- */
 void app_main(void)
 {
-    /* ── Status LED — red while booting / calibrating ─────────────── */
+    /* -- Status LED -- red while booting / calibrating --------------- */
     const led_strip_config_t strip_cfg = {
         .strip_gpio_num   = STATUS_LED_GPIO,
         .max_leds         = 1,
@@ -173,7 +173,7 @@ void app_main(void)
     led_strip_set_pixel(s_status_led, 0, 32, 0, 0);   /* red */
     led_strip_refresh(s_status_led);
 
-    ESP_LOGI(TAG, "Initialising encoders …");
+    ESP_LOGI(TAG, "Initialising encoders ...");
     ESP_ERROR_CHECK(as5600_init(&s_enc1, ENCODER1_I2C_PORT,
                                 ENCODER1_SDA_GPIO, ENCODER1_SCL_GPIO,
                                 ENCODER_I2C_FREQ_HZ));
@@ -181,7 +181,7 @@ void app_main(void)
                                 ENCODER2_SDA_GPIO, ENCODER2_SCL_GPIO,
                                 ENCODER_I2C_FREQ_HZ));
 
-    ESP_LOGI(TAG, "Initialising buttons …");
+    ESP_LOGI(TAG, "Initialising buttons ...");
     for (int i = 0; i < BUTTON_COUNT; i++) {
         const gpio_config_t btn_cfg = {
             .pin_bit_mask = 1ULL << s_button_gpios[i],
@@ -193,7 +193,7 @@ void app_main(void)
         ESP_ERROR_CHECK(gpio_config(&btn_cfg));
     }
 
-    ESP_LOGI(TAG, "Initialising motor drivers …");
+    ESP_LOGI(TAG, "Initialising motor drivers ...");
     ESP_ERROR_CHECK(l298n_init(&s_drv1, LEDC_TIMER_0,
                                MOTOR1_IN1_GPIO, MOTOR1_IN2_GPIO,
                                MOTOR1_IN3_GPIO,
@@ -205,7 +205,7 @@ void app_main(void)
                                LEDC_CHANNEL_3,
                                MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
 
-    ESP_LOGI(TAG, "Calibrating FOC …");
+    ESP_LOGI(TAG, "Calibrating FOC ...");
     foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS, s_motor1_angle_offset);
     foc_init(&s_foc2, &s_enc2, &s_drv2, MOTOR_POLE_PAIRS, s_motor2_angle_offset);
     ESP_ERROR_CHECK(foc_calibrate(&s_foc1));
@@ -213,11 +213,11 @@ void app_main(void)
     ESP_ERROR_CHECK(foc_calibrate(&s_foc2));
     ESP_LOGI(TAG, "Zero angle #2: %f", s_foc2.zero_electrical_angle);
 
-    ESP_LOGI(TAG, "Setting up haptic axes …");
+    ESP_LOGI(TAG, "Setting up haptic axes ...");
     haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength, s_motor1_dead_zone, s_motor1_smoothing_alpha);
     haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength, s_motor2_dead_zone, s_motor2_smoothing_alpha);
 
-    ESP_LOGI(TAG, "Calibrating haptic detent positions …");
+    ESP_LOGI(TAG, "Calibrating haptic detent positions ...");
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis1));
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis2));
 
@@ -225,15 +225,15 @@ void app_main(void)
     s_pos1_middle = s_axis1.steps / 2;
     s_pos2_middle = s_axis2.steps / 2;
 
-    ESP_LOGI(TAG, "Moving motors to centre position …");
+    ESP_LOGI(TAG, "Moving motors to centre position ...");
     ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis1, s_pos1_middle));
     ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, s_pos2_middle));
 
-    /* ── Status LED — green, calibration complete ─────────────────── */
+    /* -- Status LED -- green, calibration complete ------------------- */
     led_strip_set_pixel(s_status_led, 0, 0, 32, 0);   /* green */
     led_strip_refresh(s_status_led);
 
-    ESP_LOGI(TAG, "Starting USB gamepad …");
+    ESP_LOGI(TAG, "Starting USB gamepad ...");
     ESP_ERROR_CHECK(usb_gamepad_init());
 
     /* Create report task first so its handle is available to writers. */
