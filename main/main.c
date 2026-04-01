@@ -17,6 +17,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "led_strip.h"
 #include <math.h>
 
 static const char *TAG = "main";
@@ -47,6 +48,7 @@ static as5600_t      s_enc1, s_enc2;
 static l298n_t       s_drv1, s_drv2;
 static foc_motor_t   s_foc1, s_foc2;
 static haptic_axis_t s_axis1, s_axis2;
+static led_strip_handle_t s_status_led;
 
 /* ── Shared state (written by individual tasks, read by report task) ── */
 static volatile uint16_t s_pos1;
@@ -127,6 +129,19 @@ static void report_task(void *arg)
 /* ── Application entry point ──────────────────────────────────────── */
 void app_main(void)
 {
+    /* ── Status LED — red while booting / calibrating ─────────────── */
+    const led_strip_config_t strip_cfg = {
+        .strip_gpio_num   = STATUS_LED_GPIO,
+        .max_leds         = 1,
+    };
+    const led_strip_rmt_config_t rmt_cfg = {
+        .resolution_hz = 10 * 1000 * 1000,  /* 10 MHz */
+    };
+    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_cfg, &rmt_cfg,
+                                             &s_status_led));
+    led_strip_set_pixel(s_status_led, 0, 32, 0, 0);   /* red */
+    led_strip_refresh(s_status_led);
+
     ESP_LOGI(TAG, "Initialising encoders …");
     ESP_ERROR_CHECK(as5600_init(&s_enc1, ENCODER1_I2C_PORT,
                                 ENCODER1_SDA_GPIO, ENCODER1_SCL_GPIO,
@@ -172,6 +187,10 @@ void app_main(void)
     ESP_LOGI(TAG, "Calibrating haptic detent positions …");
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis1));
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis2));
+
+    /* ── Status LED — green, calibration complete ─────────────────── */
+    led_strip_set_pixel(s_status_led, 0, 0, 32, 0);   /* green */
+    led_strip_refresh(s_status_led);
 
     ESP_LOGI(TAG, "Starting USB gamepad …");
     ESP_ERROR_CHECK(usb_gamepad_init());
