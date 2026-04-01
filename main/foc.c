@@ -23,6 +23,25 @@
 /* 120° in radians. */
 #define TWO_PI_OVER_3  (2.0f * (float)M_PI / 3.0f)
 
+/* Number of measurement points per sweep direction within one
+ * electrical cycle.
+ *
+ * With 6 points the field advances 60° electrical per step, giving
+ * alignment torque = 0.85 × sin(60°) ≈ 0.74 — well above any
+ * cogging-torque peak.  The total mechanical travel is only ~43°
+ * (one electrical cycle / pole_pairs), keeping calibration fast
+ * and unobtrusive.
+ *
+ * The measured corrections are tiled across the full 128-bin table
+ * using electrical-angle periodicity.  This captures motor
+ * construction imperfections exactly (they repeat every electrical
+ * cycle) and approximates the slow-varying AS5600 encoder
+ * nonlinearity well.                                                  */
+#define CAL_ELEC_STEPS    6
+
+/* Milliseconds to let the rotor settle at each alignment point. */
+#define CAL_SETTLE_MS     60
+
 void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs)
 {
@@ -33,26 +52,34 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
     memset(motor->cal_table, 0, sizeof(motor->cal_table));
 }
 
+/* -----------------------------------------------------------------
+ * Helper: set three-phase PWM from a field angle and amplitude.
+ * Computes sinusoidal duties, clamps to [0, max_duty], and writes.
+ * ----------------------------------------------------------------- */
+static esp_err_t set_field(const l298n_t *drv, uint32_t half,
+                           float amplitude, float field_angle)
+{
+    float du = half + half * amplitude * sinf(field_angle);
+    float dv = half + half * amplitude * sinf(field_angle - TWO_PI_OVER_3);
+    float dw = half + half * amplitude * sinf(field_angle + TWO_PI_OVER_3);
+    if (du < 0.0f) du = 0.0f;
+    if (dv < 0.0f) dv = 0.0f;
+    if (dw < 0.0f) dw = 0.0f;
+    return l298n_set_three_phase(drv, (uint32_t)du, (uint32_t)dv, (uint32_t)dw);
+}
+
 esp_err_t foc_calibrate(foc_motor_t *motor)
 {
     uint32_t half = motor->driver->max_duty / 2;
-    float cal_amplitude = 0.25f;
+    float cal_amplitude = 0.85f;
     float two_pi = 2.0f * (float)M_PI;
     float pp     = (float)motor->pole_pairs;
 
     /*
      * Phase 1 — Align the rotor to electrical angle 0 and record the
      * encoder reading to establish zero_electrical_angle.
-     *
-     *   U = half + half · 0.25 · sin(0)        = half
-     *   V = half + half · 0.25 · sin(−120°)     ≈ half − 0.217·half
-     *   W = half + half · 0.25 · sin(+120°)     ≈ half + 0.217·half
      */
-    uint32_t du = (uint32_t)(half + half * cal_amplitude * sinf(0.0f));
-    uint32_t dv = (uint32_t)(half + half * cal_amplitude * sinf(-TWO_PI_OVER_3));
-    uint32_t dw = (uint32_t)(half + half * cal_amplitude * sinf(TWO_PI_OVER_3));
-
-    esp_err_t err = l298n_set_three_phase(motor->driver, du, dv, dw);
+    esp_err_t err = set_field(motor->driver, half, cal_amplitude, 0.0f);
     if (err != ESP_OK) return err;
 
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -67,35 +94,36 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     motor->zero_electrical_angle = fmodf(angle * pp, two_pi);
 
     /*
-     * Phase 2 — Sweep one full mechanical revolution (pole_pairs
-     * electrical cycles) while the motor is still energised.
+     * Phase 2 — Open-loop sweep over one electrical cycle (~51° mech.).
      *
-     * At each of the FOC_CAL_TABLE_SIZE steps the stator field is set
-     * to a known electrical angle and the rotor aligns to it.  The
-     * difference between the true (commanded) electrical angle and the
-     * naïve value derived from the encoder reading is stored as a
-     * per-bin correction.  At run-time foc_set_torque() interpolates
-     * this table to compensate for AS5600 encoder nonlinearity.
+     * At each of CAL_ELEC_STEPS positions the stator field is set to a
+     * known electrical angle and the rotor aligns to it.  The step size
+     * (60° elec.) provides strong alignment torque that easily overcomes
+     * cogging peaks.  Each correction is the difference between the
+     * commanded electrical angle and the naïve value derived from the
+     * encoder reading.
      *
      * Two sweeps — forward then backward — are averaged so that any
      * directional bias from motor inertia or limited settle time
-     * cancels out, preventing asymmetric CW/CCW torque.
+     * cancels out.
+     *
+     * Because the motor's construction imperfections repeat every
+     * electrical cycle, the corrections measured here are tiled across
+     * the full 128-bin cal_table by electrical-angle lookup.
      */
-    for (int i = 0; i < FOC_CAL_TABLE_SIZE; i++) {
-        float theta_e = (float)i / (float)FOC_CAL_TABLE_SIZE * pp * two_pi;
+    float elec_corr[CAL_ELEC_STEPS];
 
-        du = (uint32_t)(half + half * cal_amplitude * sinf(theta_e));
-        dv = (uint32_t)(half + half * cal_amplitude * sinf(theta_e - TWO_PI_OVER_3));
-        dw = (uint32_t)(half + half * cal_amplitude * sinf(theta_e + TWO_PI_OVER_3));
+    /* ── Forward sweep (one electrical cycle) ──────────────────── */
+    for (int i = 0; i < CAL_ELEC_STEPS; i++) {
+        float theta_e = two_pi * (float)i / (float)CAL_ELEC_STEPS;
 
-        err = l298n_set_three_phase(motor->driver, du, dv, dw);
+        err = set_field(motor->driver, half, cal_amplitude, theta_e);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
             l298n_coast(motor->driver);
             return err;
         }
-
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelay(pdMS_TO_TICKS(CAL_SETTLE_MS));
 
         float mech;
         err = as5600_read_angle_rad(motor->encoder, &mech);
@@ -105,41 +133,24 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
             return err;
         }
 
-        /* What the naïve foc_set_torque() formula would compute: */
         float naive  = fmodf(mech * pp, two_pi) - motor->zero_electrical_angle;
-
-        /* What the electrical angle actually is (rotor aligned to field): */
-        float actual = fmodf(theta_e, two_pi);
-
-        /* Correction = actual − naïve, normalised to [−π, +π]. */
-        float corr = fmodf(actual - naive, two_pi);
+        float corr   = fmodf(theta_e - naive, two_pi);
         if (corr >  (float)M_PI) corr -= two_pi;
         if (corr < -(float)M_PI) corr += two_pi;
-
-        motor->cal_table[i] = corr;
+        elec_corr[i] = corr;
     }
 
-    /* Backward sweep — average with the forward pass. */
-    for (int i = FOC_CAL_TABLE_SIZE - 1; i >= 0; i--) {
-        float theta_e = (float)i / (float)FOC_CAL_TABLE_SIZE * pp * two_pi;
+    /* ── Backward sweep — average with the forward pass ────────── */
+    for (int i = CAL_ELEC_STEPS - 1; i >= 0; i--) {
+        float theta_e = two_pi * (float)i / (float)CAL_ELEC_STEPS;
 
-        float du_cal = half + half * cal_amplitude * sinf(theta_e);
-        float dv_cal = half + half * cal_amplitude * sinf(theta_e - TWO_PI_OVER_3);
-        float dw_cal = half + half * cal_amplitude * sinf(theta_e + TWO_PI_OVER_3);
-        if (du_cal < 0.0f) du_cal = 0.0f;
-        if (dv_cal < 0.0f) dv_cal = 0.0f;
-        if (dw_cal < 0.0f) dw_cal = 0.0f;
-
-        err = l298n_set_three_phase(motor->driver,
-                                    (uint32_t)du_cal, (uint32_t)dv_cal,
-                                    (uint32_t)dw_cal);
+        err = set_field(motor->driver, half, cal_amplitude, theta_e);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
             l298n_coast(motor->driver);
             return err;
         }
-
-        vTaskDelay(pdMS_TO_TICKS(20));
+        vTaskDelay(pdMS_TO_TICKS(CAL_SETTLE_MS));
 
         float mech;
         err = as5600_read_angle_rad(motor->encoder, &mech);
@@ -150,12 +161,24 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         }
 
         float naive  = fmodf(mech * pp, two_pi) - motor->zero_electrical_angle;
-        float actual = fmodf(theta_e, two_pi);
-        float corr = fmodf(actual - naive, two_pi);
+        float corr   = fmodf(theta_e - naive, two_pi);
         if (corr >  (float)M_PI) corr -= two_pi;
         if (corr < -(float)M_PI) corr += two_pi;
+        elec_corr[i] = (elec_corr[i] + corr) * 0.5f;
+    }
 
-        motor->cal_table[i] = (motor->cal_table[i] + corr) * 0.5f;
+    /* ── Tile corrections into the 128-bin table by elec. phase ── */
+    for (int j = 0; j < FOC_CAL_TABLE_SIZE; j++) {
+        float mech_j = (float)j / (float)FOC_CAL_TABLE_SIZE * two_pi;
+        float phase  = fmodf(mech_j * pp - motor->zero_electrical_angle, two_pi);
+        if (phase < 0.0f) phase += two_pi;
+
+        float pos  = phase / two_pi * (float)CAL_ELEC_STEPS;
+        int   idx0 = (int)floorf(pos) % CAL_ELEC_STEPS;
+        int   idx1 = (idx0 + 1) % CAL_ELEC_STEPS;
+        float frac = pos - floorf(pos);
+        motor->cal_table[j] = elec_corr[idx0]
+                             + frac * (elec_corr[idx1] - elec_corr[idx0]);
     }
 
     return l298n_coast(motor->driver);
