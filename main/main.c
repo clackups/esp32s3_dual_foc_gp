@@ -59,7 +59,7 @@ static volatile uint16_t s_buttons;
 static TaskHandle_t      s_report_task_handle;
 
 /* Centre position for each axis (steps / 2).  The HID report sends the
- * signed deviation from this midpoint, scaled to ±127.                 */
+ * signed deviation from this midpoint, scaled to ±32767.               */
 static uint16_t s_pos1_middle;
 static uint16_t s_pos2_middle;
 
@@ -129,26 +129,26 @@ static void report_task(void *arg)
         bool periodic = (xTaskGetTickCount() - last_send >= periodic_interval);
 
         if (changed || periodic) {
-            /* Map position deviation from middle to signed HID axis
-             * (−127 … +127).  The centre detent (pos == middle) maps
-             * to exactly 0, so the host sees a true zero with no
+            /* Map position deviation from middle to signed 16-bit HID
+             * axis (−32767 … +32767).  The centre detent (pos == middle)
+             * maps to exactly 0, so the host sees a true zero with no
              * rounding artefacts.
              *
              * half = steps / 2 (equal to middle for odd step counts).
-             * val  = (pos − middle) * 127 / half, clamped to ±127.   */
+             * val  = (pos − middle) * 32767 / half, clamped to ±32767. */
             int32_t half1 = (int32_t)(s_axis1.steps / 2);
             int32_t dev1  = (int32_t)pos1 - (int32_t)s_pos1_middle;
-            int32_t v1    = (half1 > 0) ? (dev1 * 127 / half1) : 0;
-            if (v1 >  127) v1 =  127;
-            if (v1 < -127) v1 = -127;
+            int32_t v1    = (half1 > 0) ? (dev1 * 32767 / half1) : 0;
+            if (v1 >  32767) v1 =  32767;
+            if (v1 < -32767) v1 = -32767;
 
             int32_t half2 = (int32_t)(s_axis2.steps / 2);
             int32_t dev2  = (int32_t)pos2 - (int32_t)s_pos2_middle;
-            int32_t v2    = (half2 > 0) ? (dev2 * 127 / half2) : 0;
-            if (v2 >  127) v2 =  127;
-            if (v2 < -127) v2 = -127;
+            int32_t v2    = (half2 > 0) ? (dev2 * 32767 / half2) : 0;
+            if (v2 >  32767) v2 =  32767;
+            if (v2 < -32767) v2 = -32767;
 
-            usb_gamepad_report((int8_t)v1, (int8_t)v2, buttons);
+            usb_gamepad_report((int16_t)v1, (int16_t)v2, buttons);
             prev_pos1    = pos1;
             prev_pos2    = pos2;
             prev_buttons = buttons;
