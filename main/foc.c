@@ -36,7 +36,7 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
 esp_err_t foc_calibrate(foc_motor_t *motor)
 {
     uint32_t half = motor->driver->max_duty / 2;
-    float cal_amplitude = 0.25f;
+    float cal_amplitude = 0.65f;
     float two_pi = 2.0f * (float)M_PI;
     float pp     = (float)motor->pole_pairs;
 
@@ -44,15 +44,20 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
      * Phase 1 — Align the rotor to electrical angle 0 and record the
      * encoder reading to establish zero_electrical_angle.
      *
-     *   U = half + half · 0.25 · sin(0)        = half
-     *   V = half + half · 0.25 · sin(−120°)     ≈ half − 0.217·half
-     *   W = half + half · 0.25 · sin(+120°)     ≈ half + 0.217·half
+     *   U = half + half · cal_amplitude · sin(0)        = half
+     *   V = half + half · cal_amplitude · sin(−120°)     ≈ half − 0.563·half
+     *   W = half + half · cal_amplitude · sin(+120°)     ≈ half + 0.563·half
      */
-    uint32_t du = (uint32_t)(half + half * cal_amplitude * sinf(0.0f));
-    uint32_t dv = (uint32_t)(half + half * cal_amplitude * sinf(-TWO_PI_OVER_3));
-    uint32_t dw = (uint32_t)(half + half * cal_amplitude * sinf(TWO_PI_OVER_3));
+    float du_f = half + half * cal_amplitude * sinf(0.0f);
+    float dv_f = half + half * cal_amplitude * sinf(-TWO_PI_OVER_3);
+    float dw_f = half + half * cal_amplitude * sinf(TWO_PI_OVER_3);
+    if (du_f < 0.0f) du_f = 0.0f;
+    if (dv_f < 0.0f) dv_f = 0.0f;
+    if (dw_f < 0.0f) dw_f = 0.0f;
 
-    esp_err_t err = l298n_set_three_phase(motor->driver, du, dv, dw);
+    esp_err_t err = l298n_set_three_phase(motor->driver,
+                                          (uint32_t)du_f, (uint32_t)dv_f,
+                                          (uint32_t)dw_f);
     if (err != ESP_OK) return err;
 
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -84,11 +89,16 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     for (int i = 0; i < FOC_CAL_TABLE_SIZE; i++) {
         float theta_e = (float)i / (float)FOC_CAL_TABLE_SIZE * pp * two_pi;
 
-        du = (uint32_t)(half + half * cal_amplitude * sinf(theta_e));
-        dv = (uint32_t)(half + half * cal_amplitude * sinf(theta_e - TWO_PI_OVER_3));
-        dw = (uint32_t)(half + half * cal_amplitude * sinf(theta_e + TWO_PI_OVER_3));
+        du_f = half + half * cal_amplitude * sinf(theta_e);
+        dv_f = half + half * cal_amplitude * sinf(theta_e - TWO_PI_OVER_3);
+        dw_f = half + half * cal_amplitude * sinf(theta_e + TWO_PI_OVER_3);
+        if (du_f < 0.0f) du_f = 0.0f;
+        if (dv_f < 0.0f) dv_f = 0.0f;
+        if (dw_f < 0.0f) dw_f = 0.0f;
 
-        err = l298n_set_three_phase(motor->driver, du, dv, dw);
+        err = l298n_set_three_phase(motor->driver,
+                                    (uint32_t)du_f, (uint32_t)dv_f,
+                                    (uint32_t)dw_f);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
             l298n_coast(motor->driver);
