@@ -58,6 +58,11 @@ static volatile uint16_t s_pos2;
 static volatile uint16_t s_buttons;
 static TaskHandle_t      s_report_task_handle;
 
+/* Centre position for each axis (steps / 2).  The HID report sends the
+ * signed deviation from this midpoint, scaled to ±127.                 */
+static uint16_t s_pos1_middle;
+static uint16_t s_pos2_middle;
+
 /* ── Haptic task for axis 1 (runs as fast as possible) ────────────── */
 static void haptic1_task(void *arg)
 {
@@ -124,24 +129,26 @@ static void report_task(void *arg)
         bool periodic = (xTaskGetTickCount() - last_send >= periodic_interval);
 
         if (changed || periodic) {
-            /* Map position [0, steps−1] → HID axis [0, 254].
+            /* Map position deviation from middle to signed HID axis
+             * (−127 … +127).  The centre detent (pos == middle) maps
+             * to exactly 0, so the host sees a true zero with no
+             * rounding artefacts.
              *
-             * The HID Logical Maximum is 254 (not 255) so the axis has
-             * an odd number of discrete values (255).  This places the
-             * centre at exactly 127 — a true integer midpoint — so the
-             * host normalises the centre step to 0.000 with no residual
-             * offset.  Both adjacent steps then land at ≈ ±10.2 %,
-             * just outside a typical 10 % host dead-zone, giving
-             * exactly one detent position at "zero".
-             *
-             * With an even value count (0–255) the midpoint falls
-             * between 127 and 128; no matter how we round, one or both
-             * neighbours end up inside the dead-zone.                   */
-            uint32_t d1 = (uint32_t)(s_axis1.steps - 1);
-            uint8_t x = (uint8_t)(((uint32_t)pos1 * 254U + d1 / 2U) / d1);
-            uint32_t d2 = (uint32_t)(s_axis2.steps - 1);
-            uint8_t y = (uint8_t)(((uint32_t)pos2 * 254U + d2 / 2U) / d2);
-            usb_gamepad_report(x, y, buttons);
+             * half = steps / 2 (equal to middle for odd step counts).
+             * val  = (pos − middle) * 127 / half, clamped to ±127.   */
+            int32_t half1 = (int32_t)(s_axis1.steps / 2);
+            int32_t dev1  = (int32_t)pos1 - (int32_t)s_pos1_middle;
+            int32_t v1    = (half1 > 0) ? (dev1 * 127 / half1) : 0;
+            if (v1 >  127) v1 =  127;
+            if (v1 < -127) v1 = -127;
+
+            int32_t half2 = (int32_t)(s_axis2.steps / 2);
+            int32_t dev2  = (int32_t)pos2 - (int32_t)s_pos2_middle;
+            int32_t v2    = (half2 > 0) ? (dev2 * 127 / half2) : 0;
+            if (v2 >  127) v2 =  127;
+            if (v2 < -127) v2 = -127;
+
+            usb_gamepad_report((int8_t)v1, (int8_t)v2, buttons);
             prev_pos1    = pos1;
             prev_pos2    = pos2;
             prev_buttons = buttons;
@@ -214,9 +221,13 @@ void app_main(void)
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis1));
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis2));
 
+    /* Compute and store the centre detent index for HID reporting. */
+    s_pos1_middle = s_axis1.steps / 2;
+    s_pos2_middle = s_axis2.steps / 2;
+
     ESP_LOGI(TAG, "Moving motors to centre position …");
-    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis1, s_axis1.steps / 2));
-    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, s_axis2.steps / 2));
+    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis1, s_pos1_middle));
+    ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, s_pos2_middle));
 
     /* ── Status LED — green, calibration complete ─────────────────── */
     led_strip_set_pixel(s_status_led, 0, 0, 32, 0);   /* green */

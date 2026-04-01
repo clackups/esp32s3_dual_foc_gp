@@ -13,8 +13,8 @@
  * Report layout (4 bytes total):
  *   byte 0     – buttons 1–8  (bits 0–7)
  *   byte 1     – buttons 9–10 (bits 0–1) + 6-bit padding
- *   byte 2     – X axis (0–254, centre 127)
- *   byte 3     – Y axis (0–254, centre 127)
+ *   byte 2     – X axis (signed, −127 … +127, 0 = centre)
+ *   byte 3     – Y axis (signed, −127 … +127, 0 = centre)
  */
 static const uint8_t s_hid_report_desc[] = {
     0x05, 0x01,        /*  Usage Page (Generic Desktop)        */
@@ -42,8 +42,8 @@ static const uint8_t s_hid_report_desc[] = {
     0xA1, 0x00,        /*    Collection (Physical)             */
     0x09, 0x30,        /*      Usage (X)                       */
     0x09, 0x31,        /*      Usage (Y)                       */
-    0x15, 0x00,        /*      Logical Minimum (0)             */
-    0x26, 0xFE, 0x00,  /*      Logical Maximum (254)           */
+    0x15, 0x81,        /*      Logical Minimum (−127)          */
+    0x25, 0x7F,        /*      Logical Maximum (127)            */
     0x75, 0x08,        /*      Report Size (8)                 */
     0x95, 0x02,        /*      Report Count (2)                */
     0x81, 0x02,        /*      Input (Data, Var, Abs)          */
@@ -104,7 +104,7 @@ esp_err_t usb_gamepad_init(void)
     return tinyusb_driver_install(&tusb_cfg);
 }
 
-esp_err_t usb_gamepad_report(uint8_t axis_x, uint8_t axis_y,
+esp_err_t usb_gamepad_report(int8_t axis_x, int8_t axis_y,
                             uint16_t buttons)
 {
     if (!tud_hid_ready()) {
@@ -115,8 +115,8 @@ esp_err_t usb_gamepad_report(uint8_t axis_x, uint8_t axis_y,
     uint8_t report[4] = {
         (uint8_t)(buttons & 0xFF),         /* buttons 1–8          */
         (uint8_t)((buttons >> 8) & 0x03),  /* buttons 9–10 + pad   */
-        axis_x,
-        axis_y,
+        (uint8_t)axis_x,
+        (uint8_t)axis_y,
     };
     if (!tud_hid_report(0, report, sizeof(report))) {
         return ESP_FAIL;
