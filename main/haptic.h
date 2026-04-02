@@ -16,7 +16,7 @@
 #define HAPTIC_DEFAULT_STEPS 21
 
 /** Maximum normalised torque applied for the detent effect (0 - 1). */
-#define HAPTIC_DEFAULT_STRENGTH 0.60f
+#define HAPTIC_DEFAULT_STRENGTH 0.80f
 
 /** Default dead-zone expressed as a fraction of one step angle.
  *  Within this zone around a detent centre the rotor is treated as
