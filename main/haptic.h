@@ -2,13 +2,16 @@
  * haptic.h -- Haptic-detent feedback engine.
  *
  * Each motor axis is divided into a configurable number of equal steps
- * per full rotation.  The engine pulls the rotor toward the nearest
- * detent position with a spring-like restoring torque.
+ * per full rotation.  The engine uses a zone-transition algorithm: the
+ * motor coasts while the rotor stays within the current zone, and
+ * pushes the rotor to the centre of the new zone when a boundary is
+ * crossed.  This creates a tactile "click" at each detent transition.
  */
 
 #pragma once
 
 #include "foc.h"
+#include <stdbool.h>
 
 /** Default number of steps per 360 deg revolution.
  *  Matches FOC_DEFAULT_POLE_PAIRS (7) so that every detent centre
@@ -39,6 +42,8 @@ typedef struct {
     float        dead_zone;        /* fraction of step_angle (0-<0.5)  */
     float        smoothing_alpha;  /* EMA factor (0 < alpha <= 1)           */
     float        phase_offset;     /* angular offset for detent centres */
+    int          target_detent;    /* current zone the rotor has settled in */
+    bool         pushing;          /* true while driving to new zone centre */
 } haptic_axis_t;
 
 /**
@@ -60,8 +65,11 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
                  float smoothing_alpha);
 
 /**
- * Run one tick of the haptic loop: read angle, compute nearest detent,
- * apply restoring torque.
+ * Run one tick of the haptic loop: read angle, detect zone transitions,
+ * and push the rotor to the centre of the new zone when a transition
+ * occurs.  While the rotor stays inside the current zone, no torque is
+ * applied (the motor coasts).  Inspired by the "notchyWheel" algorithm
+ * from https://github.com/dmcke5/Hapticpad.
  *
  * Call this at a fixed rate (e.g. every 1 ms from a FreeRTOS task).
  *

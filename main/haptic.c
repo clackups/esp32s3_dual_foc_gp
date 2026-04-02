@@ -21,7 +21,9 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
     axis->smoothing_alpha = (smoothing_alpha <= 0.0f) ? 0.01f
                           : (smoothing_alpha > 1.0f)  ? 1.0f
                           : smoothing_alpha;
-    axis->phase_offset = 0.0f;
+    axis->phase_offset   = 0.0f;
+    axis->target_detent  = 0;
+    axis->pushing        = false;
 }
 
 esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
@@ -31,42 +33,69 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
     esp_err_t err = foc_read_angle(axis->motor, &angle);
     if (err != ESP_OK) return err;
 
-    /* Nearest detent index and its centre angle. */
+    /* Nearest detent index from the current angle. */
     float shifted     = angle - axis->phase_offset;
     float idx_f       = shifted / axis->step_angle;
     int   nearest_idx = (int)roundf(idx_f);
-    float detent_angle = (float)nearest_idx * axis->step_angle + axis->phase_offset;
-
-    /* Signed angular error from the detent centre. */
-    float delta = detent_angle - angle;
-
-    /* Wrap to -pi ... +pi (in practice delta is small). */
-    if (delta >  (float)M_PI) delta -= 2.0f * (float)M_PI;
-    if (delta < -(float)M_PI) delta += 2.0f * (float)M_PI;
 
     /*
-     * Torque is proportional to the error, clamped to +/-strength.
-     * A dead-zone around the detent centre allows a small region where
-     * no restoring torque is applied (neutral position).
+     * Zone-transition algorithm (inspired by the Hapticpad notchyWheel):
      *
-     * Outside the dead zone the torque ramps from zero at the dead-zone
-     * boundary to +/-strength at half a step-angle.
+     * While the rotor stays in the current zone (nearest_idx ==
+     * target_detent) no torque is applied -- the motor coasts and the
+     * user can move the knob freely.
+     *
+     * Once the rotor crosses into a neighbouring zone the target is
+     * updated and the motor pushes the rotor toward the centre of
+     * the new zone (pushing = true).  The push continues until the
+     * rotor is close enough to the new centre (within the settle
+     * threshold), at which point pushing is cleared and the motor
+     * coasts again.
      */
-    float dz_rad = axis->dead_zone * axis->step_angle;
-    float abs_delta = (delta >= 0.0f) ? delta : -delta;
+    if (nearest_idx != axis->target_detent) {
+        axis->target_detent = nearest_idx;
+        axis->pushing       = true;
+    }
+
     float torque;
 
-    if (abs_delta <= dz_rad) {
-        torque = 0.0f;
+    if (axis->pushing) {
+        float detent_angle = (float)axis->target_detent * axis->step_angle
+                           + axis->phase_offset;
+
+        /* Signed angular error from the zone centre. */
+        float delta = detent_angle - angle;
+        if (delta >  (float)M_PI) delta -= 2.0f * (float)M_PI;
+        if (delta < -(float)M_PI) delta += 2.0f * (float)M_PI;
+
+        float abs_delta = (delta >= 0.0f) ? delta : -delta;
+
+        /*
+         * Settle threshold: use the dead-zone if configured, otherwise
+         * 5% of one step angle so the motor does not hunt forever.
+         */
+        float settle = axis->dead_zone * axis->step_angle;
+        if (settle < 0.05f * axis->step_angle)
+            settle = 0.05f * axis->step_angle;
+
+        if (abs_delta <= settle) {
+            /* Close enough to centre -- stop pushing, coast. */
+            axis->pushing = false;
+            torque = 0.0f;
+        } else {
+            /* Proportional torque toward zone centre. */
+            float active_range = axis->step_angle * 0.5f;
+            float gain = (active_range > 1e-6f)
+                       ? axis->strength / active_range
+                       : 0.0f;
+            float sign = (delta >= 0.0f) ? 1.0f : -1.0f;
+            torque = gain * abs_delta * sign;
+            if (torque >  axis->strength) torque =  axis->strength;
+            if (torque < -axis->strength) torque = -axis->strength;
+        }
     } else {
-        float active_range = axis->step_angle * 0.5f - dz_rad;
-        float gain = (active_range > 1e-6f)
-                   ? axis->strength / active_range
-                   : 0.0f;
-        float sign = (delta >= 0.0f) ? 1.0f : -1.0f;
-        torque = gain * (abs_delta - dz_rad) * sign;
-        if (torque >  axis->strength) torque =  axis->strength;
-        if (torque < -axis->strength) torque = -axis->strength;
+        /* Inside current zone -- coast (no motor engagement). */
+        torque = 0.0f;
     }
 
     /*
@@ -84,7 +113,7 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
     if (err != ESP_OK) return err;
 
     if (position) {
-        int idx = nearest_idx % (int)axis->steps;
+        int idx = axis->target_detent % (int)axis->steps;
         if (idx < 0) idx += (int)axis->steps;
         *position = (uint16_t)idx;
     }
@@ -182,6 +211,11 @@ esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent)
 
         vTaskDelay(pdMS_TO_TICKS(1));
     }
+
+    /* Seed the zone-transition state so that the haptic loop starts
+     * in coast mode at the detent we just moved to.                 */
+    axis->target_detent = (int)detent;
+    axis->pushing       = false;
 
     return foc_coast(axis->motor);
 }
