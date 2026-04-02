@@ -40,9 +40,9 @@ static float    s_motor2_angle_offset = 0.0f;  /* magnet mounting offset (rad) *
 
 /* -- Button GPIO table ----------------------------------------------- */
 static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
-    BUTTON1_GPIO,  BUTTON2_GPIO,  BUTTON3_GPIO,  BUTTON4_GPIO,
-    BUTTON5_GPIO,  BUTTON6_GPIO,  BUTTON7_GPIO,  BUTTON8_GPIO,
-    BUTTON9_GPIO,  BUTTON10_GPIO,
+    BUTTON0_GPIO,  BUTTON1_GPIO,  BUTTON2_GPIO,  BUTTON3_GPIO,
+    BUTTON4_GPIO,  BUTTON5_GPIO,  BUTTON6_GPIO,  BUTTON7_GPIO,
+    BUTTON8_GPIO,  BUTTON9_GPIO,
 };
 
 /* -- Hardware instances ---------------------------------------------- */

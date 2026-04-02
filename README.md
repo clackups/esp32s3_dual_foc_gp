@@ -31,16 +31,16 @@ changed there without modifying any other file.
 | MOTOR2_IN1  | 15 | Motor 2 coil U - Mini L298N IN1 (PWM) |
 | MOTOR2_IN2  | 16 | Motor 2 coil V - Mini L298N IN2 (PWM) |
 | MOTOR2_IN3  | 17 | Motor 2 coil W - Mini L298N IN3 (PWM) |
-| BUTTON1     | 4  | Game controller button 1 (active-low)  |
-| BUTTON2     | 5  | Game controller button 2 (active-low)  |
-| BUTTON3     | 36 | Game controller button 3 (active-low)  |
-| BUTTON4     | 37 | Game controller button 4 (active-low)  |
-| BUTTON5     | 6  | Game controller button 5 (active-low)  |
-| BUTTON6     | 7  | Game controller button 6 (active-low)  |
-| BUTTON7     | 8  | Game controller button 7 (active-low)  |
-| BUTTON8     | 18 | Game controller button 8 (active-low)  |
-| BUTTON9     | 21 | Game controller button 9 (active-low)  |
-| BUTTON10    | 38 | Game controller button 10 (active-low) |
+| BUTTON0     | 4  | Game controller button 0 (active-low)  |
+| BUTTON1     | 5  | Game controller button 1 (active-low)  |
+| BUTTON2     | 6  | Game controller button 2 (active-low)  |
+| BUTTON3     | 7  | Game controller button 3 (active-low)  |
+| BUTTON4     | 8  | Game controller button 4 (active-low)  |
+| BUTTON5     | 18 | Game controller button 5 (active-low)  |
+| BUTTON6     | 21 | Game controller button 6 (active-low)  |
+| BUTTON7     | 36 | Game controller button 7 (active-low)  |
+| BUTTON8     | 37 | Game controller button 8 (active-low)  |
+| BUTTON9     | 38 | Game controller button 9 (active-low)  |
 | ENCODER1_SDA | 9 | AS5600 #1 - I2C SDA |
 | ENCODER1_SCL | 10 | AS5600 #1 - I2C SCL |
 | ENCODER2_SDA | 11 | AS5600 #2 - I2C SDA |
