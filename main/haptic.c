@@ -9,33 +9,22 @@
 
 /* -- Haptic-detent feedback engine ---------------------------------- */
 
-/** Minimum settle threshold as a fraction of one step angle.
- *  When the dead-zone is smaller than this value, the settle check
- *  uses this fraction instead so that the motor does not hunt
- *  indefinitely around the zone centre. */
-#define HAPTIC_MIN_SETTLE_FRAC 0.05f
-
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
-                 uint16_t steps, float strength, float dead_zone,
-                 float smoothing_alpha)
+                 uint16_t steps, float strength, float target_zone)
 {
     axis->motor      = motor;
     axis->steps      = (steps >= 2) ? steps : 2;
     axis->strength   = strength;
     axis->step_angle = 2.0f * (float)M_PI / (float)axis->steps;
-    axis->dead_zone  = (dead_zone < 0.0f) ? 0.0f
-                     : (dead_zone > 0.49f) ? 0.49f
-                     : dead_zone;
-    axis->smoothing_alpha = (smoothing_alpha <= 0.0f) ? 0.01f
-                          : (smoothing_alpha > 1.0f)  ? 1.0f
-                          : smoothing_alpha;
+    axis->target_zone = (target_zone < 0.01f) ? 0.01f
+                      : (target_zone > 0.49f) ? 0.49f
+                      : target_zone;
     axis->phase_offset   = 0.0f;
     axis->target_detent  = 0;
     axis->pushing        = false;
 }
 
-esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
-                        float *prev_torque)
+esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position)
 {
     float angle;
     esp_err_t err = foc_read_angle(axis->motor, &angle);
@@ -56,9 +45,13 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
      * Once the rotor crosses into a neighbouring zone the target is
      * updated and the motor pushes the rotor toward the centre of
      * the new zone (pushing = true).  The push continues until the
-     * rotor is close enough to the new centre (within the settle
-     * threshold), at which point pushing is cleared and the motor
-     * coasts again.
+     * rotor is within the target zone around the centre, at which
+     * point pushing is cleared and the motor coasts again.
+     *
+     * Because of physical inertia the rotor may skip past the
+     * immediate neighbour zone.  We always track nearest_idx so
+     * the target keeps up with where the rotor actually is, and
+     * pushing restarts for each new zone entered.
      */
     if (nearest_idx != axis->target_detent) {
         axis->target_detent = nearest_idx;
@@ -78,13 +71,7 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
 
         float abs_delta = (delta >= 0.0f) ? delta : -delta;
 
-        /*
-         * Settle threshold: use the dead-zone if configured, otherwise
-         * 5% of one step angle so the motor does not hunt forever.
-         */
-        float settle = axis->dead_zone * axis->step_angle;
-        if (settle < HAPTIC_MIN_SETTLE_FRAC * axis->step_angle)
-            settle = HAPTIC_MIN_SETTLE_FRAC * axis->step_angle;
+        float settle = axis->target_zone * axis->step_angle;
 
         if (abs_delta <= settle) {
             /* Close enough to centre -- stop pushing, coast. */
@@ -104,17 +91,6 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
     } else {
         /* Inside current zone -- coast (no motor engagement). */
         torque = 0.0f;
-    }
-
-    /*
-     * Exponential moving average smoothing:
-     *   smoothed = alpha * raw + (1 - alpha) * previous
-     * alpha = 1 bypasses smoothing entirely.
-     */
-    if (prev_torque) {
-        torque = axis->smoothing_alpha * torque
-               + (1.0f - axis->smoothing_alpha) * (*prev_torque);
-        *prev_torque = torque;
     }
 
     err = foc_set_torque(axis->motor, torque);

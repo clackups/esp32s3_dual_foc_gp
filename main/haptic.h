@@ -21,26 +21,19 @@
 /** Maximum normalised torque applied for the detent effect (0 - 1). */
 #define HAPTIC_DEFAULT_STRENGTH 0.60f
 
-/** Default dead-zone expressed as a fraction of one step angle.
- *  Within this zone around a detent centre the rotor is treated as
- *  being at the neutral position and no restoring torque is applied.
- *  Valid range: 0 (disabled) to just below 0.5. */
-#define HAPTIC_DEFAULT_DEAD_ZONE 0.00f
-
-/** Default smoothing factor for exponential moving average on torque.
- *  1.0 = no smoothing (raw torque used directly).
- *  Lower values give heavier smoothing (slower response).
- *  Valid range: 0 (exclusive) to 1 (inclusive); values at or below 0
- *  are clamped to 0.01. */
-#define HAPTIC_DEFAULT_SMOOTHING_ALPHA 0.7f
+/** Default target zone expressed as a fraction of one step angle.
+ *  After the rotor crosses a zone boundary, the motor pushes the rotor
+ *  until it is within this fraction of the step angle from the new
+ *  detent centre.  Smaller values give a tighter snap; larger values
+ *  stop earlier.  Valid range: > 0 to just below 0.5. */
+#define HAPTIC_DEFAULT_TARGET_ZONE 0.10f
 
 typedef struct {
     foc_motor_t *motor;
     uint16_t     steps;            /* detent positions per revolution  */
     float        strength;         /* peak normalised torque (0 - 1)   */
     float        step_angle;       /* 2pi / steps (computed)            */
-    float        dead_zone;        /* fraction of step_angle (0-<0.5)  */
-    float        smoothing_alpha;  /* EMA factor (0 < alpha <= 1)           */
+    float        target_zone;      /* fraction of step_angle (>0, <0.5) */
     float        phase_offset;     /* angular offset for detent centres */
     int          target_detent;    /* current zone the rotor has settled in */
     bool         pushing;          /* true while driving to new zone centre */
@@ -53,16 +46,14 @@ typedef struct {
  * @param motor     An already-initialised and calibrated foc_motor_t.
  * @param steps     Number of detent steps per full rotation.
  * @param strength  Peak normalised torque (0 - 1).
- * @param dead_zone Fraction of one step angle that is still treated as
- *                  the neutral (detent-centre) position.  0 disables
- *                  the dead zone; values are clamped below 0.5.
- * @param smoothing_alpha  EMA smoothing factor (0 < alpha <= 1).
- *                         1.0 = no smoothing; values <= 0 are clamped
- *                         to 0.01, values > 1 are clamped to 1.
+ * @param target_zone  Fraction of one step angle that defines the
+ *                     settle area around a detent centre.  After the
+ *                     rotor enters a new zone, the motor pushes it
+ *                     until it is within this distance from the centre.
+ *                     Clamped to 0.01 ... 0.49.
  */
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
-                 uint16_t steps, float strength, float dead_zone,
-                 float smoothing_alpha);
+                 uint16_t steps, float strength, float target_zone);
 
 /**
  * Run one tick of the haptic loop: read angle, detect zone transitions,
@@ -76,14 +67,9 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
  * @param axis  Initialised axis.
  * @param[out] position  If non-NULL, receives the current step index
  *                       (0 ... steps-1).
- * @param[in,out] prev_torque  Pointer to the previous smoothed torque.
- *                             Read for EMA input, written with the new
- *                             smoothed value.  Caller should initialise
- *                             to 0 before the first call.
  * @return ESP_OK on success.
  */
-esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
-                        float *prev_torque);
+esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position);
 
 /**
  * Calibrate the detent phase offset.
