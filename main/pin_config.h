@@ -27,16 +27,16 @@
 
 /* -- Game controller buttons (active-low, internal pull-up) ---------- */
 #define BUTTON_COUNT        10
-#define BUTTON1_GPIO        4
-#define BUTTON2_GPIO        5
-#define BUTTON3_GPIO        36
-#define BUTTON4_GPIO        37
-#define BUTTON5_GPIO        6
-#define BUTTON6_GPIO        7
-#define BUTTON7_GPIO        8
-#define BUTTON8_GPIO        18
-#define BUTTON9_GPIO        21
-#define BUTTON10_GPIO       38
+#define BUTTON0_GPIO        4
+#define BUTTON1_GPIO        5
+#define BUTTON2_GPIO        6
+#define BUTTON3_GPIO        7
+#define BUTTON4_GPIO        8
+#define BUTTON5_GPIO        18
+#define BUTTON6_GPIO        21
+#define BUTTON7_GPIO        36
+#define BUTTON8_GPIO        37
+#define BUTTON9_GPIO        38
 
 /* -- Encoder 1 -- AS5600 on I2C port 0 ------------------------------- */
 #define ENCODER1_SDA_GPIO   9

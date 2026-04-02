@@ -11,8 +11,8 @@
 /* -- HID report descriptor ------------------------------------------
  *
  * Report layout (6 bytes total):
- *   byte 0     - buttons 1-8  (bits 0-7)
- *   byte 1     - buttons 9-10 (bits 0-1) + 6-bit padding
+ *   byte 0     - buttons 0-7  (bits 0-7)
+ *   byte 1     - buttons 8-9  (bits 0-1) + 6-bit padding
  *   bytes 2-3  - X axis (signed 16-bit LE, -32767 ... +32767, 0 = centre)
  *   bytes 4-5  - Y axis (signed 16-bit LE, -32767 ... +32767, 0 = centre)
  */
@@ -114,8 +114,8 @@ esp_err_t usb_gamepad_report(int16_t axis_x, int16_t axis_y,
     /* Report: 2 bytes buttons (10 bits + 6 padding) + 4 bytes axes
      * (two signed 16-bit little-endian values).                     */
     uint8_t report[6] = {
-        (uint8_t)(buttons & 0xFF),         /* buttons 1-8          */
-        (uint8_t)((buttons >> 8) & 0x03),  /* buttons 9-10 + pad   */
+        (uint8_t)(buttons & 0xFF),         /* buttons 0-7          */
+        (uint8_t)((buttons >> 8) & 0x03),  /* buttons 8-9 + pad    */
         (uint8_t)(axis_x & 0xFF),          /* X low byte           */
         (uint8_t)((axis_x >> 8) & 0xFF),   /* X high byte          */
         (uint8_t)(axis_y & 0xFF),          /* Y low byte           */
