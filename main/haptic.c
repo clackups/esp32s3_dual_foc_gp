@@ -7,6 +7,14 @@
 #include "freertos/task.h"
 #include <math.h>
 
+/* -- Haptic-detent feedback engine ---------------------------------- */
+
+/** Minimum settle threshold as a fraction of one step angle.
+ *  When the dead-zone is smaller than this value, the settle check
+ *  uses this fraction instead so that the motor does not hunt
+ *  indefinitely around the zone centre. */
+#define HAPTIC_MIN_SETTLE_FRAC 0.05f
+
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
                  uint16_t steps, float strength, float dead_zone,
                  float smoothing_alpha)
@@ -75,8 +83,8 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
          * 5% of one step angle so the motor does not hunt forever.
          */
         float settle = axis->dead_zone * axis->step_angle;
-        if (settle < 0.05f * axis->step_angle)
-            settle = 0.05f * axis->step_angle;
+        if (settle < HAPTIC_MIN_SETTLE_FRAC * axis->step_angle)
+            settle = HAPTIC_MIN_SETTLE_FRAC * axis->step_angle;
 
         if (abs_delta <= settle) {
             /* Close enough to centre -- stop pushing, coast. */
