@@ -214,7 +214,7 @@ esp_err_t haptic_continuous_update(haptic_axis_t *axis,
     /* Quadratic restoring torque: magnitude grows with the square of
      * the distance from centre while preserving the sign.
      *   torque = strength * norm * |norm|                             */
-    float abs_norm = (norm >= 0.0f) ? norm : -norm;
+    float abs_norm = fabsf(norm);
     float torque   = strength * norm * abs_norm;
 
     /* EMA smoothing (same convention as haptic_update). */
