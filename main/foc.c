@@ -58,14 +58,24 @@
  * array.  Motors with more pole pairs than this are rejected.         */
 #define CAL_MAX_POLE_PAIRS 14
 
-/* Duration of the closed-loop drive phase per measurement step (ms).
- * The motor only needs to advance ~8.6 deg mechanical per step.      */
-#define CAL_DRIVE_MS      40
+/* Maximum duration of the closed-loop drive phase per step (ms).
+ * Must be long enough for the L298N (with its ~2 V bipolar drop)
+ * to push the rotor past the halfway point between open-loop
+ * alignment equilibria at every electrical-cycle boundary.  The
+ * loop exits early once the position error is small enough.          */
+#define CAL_DRIVE_MS      150
 
 /* P-control gain and peak torque for the closed-loop drive.
- * torque = clamp(error_rad * CAL_DRIVE_GAIN, +/-CAL_DRIVE_MAX_TQ).   */
+ * torque = clamp(error_rad * CAL_DRIVE_GAIN, +/-CAL_DRIVE_MAX_TQ).
+ * Using full torque (0.95) ensures the L298N can overcome cogging
+ * peaks even with its reduced output voltage.                        */
 #define CAL_DRIVE_GAIN    5.0f
-#define CAL_DRIVE_MAX_TQ  0.50f
+#define CAL_DRIVE_MAX_TQ  0.95f
+
+/* Position-error threshold for the closed-loop drive convergence
+ * check (radians).  ~0.5 deg mechanical -- well within the basin
+ * of attraction of the subsequent open-loop alignment.               */
+#define CAL_DRIVE_CONVERGE_RAD  0.009f
 
 void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs, float angle_offset)
@@ -190,6 +200,9 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
             float e = target - cur;
             if (e >  (float)M_PI) e -= two_pi;
             if (e < -(float)M_PI) e += two_pi;
+            /* Exit early once close enough to avoid overshooting. */
+            float abs_e = (e >= 0.0f) ? e : -e;
+            if (abs_e < CAL_DRIVE_CONVERGE_RAD) break;
             float tq = e * CAL_DRIVE_GAIN;
             if (tq >  CAL_DRIVE_MAX_TQ) tq =  CAL_DRIVE_MAX_TQ;
             if (tq < -CAL_DRIVE_MAX_TQ) tq = -CAL_DRIVE_MAX_TQ;
@@ -241,6 +254,9 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
             float e = target - cur;
             if (e >  (float)M_PI) e -= two_pi;
             if (e < -(float)M_PI) e += two_pi;
+            /* Exit early once close enough to avoid overshooting. */
+            float abs_e = (e >= 0.0f) ? e : -e;
+            if (abs_e < CAL_DRIVE_CONVERGE_RAD) break;
             float tq = e * CAL_DRIVE_GAIN;
             if (tq >  CAL_DRIVE_MAX_TQ) tq =  CAL_DRIVE_MAX_TQ;
             if (tq < -CAL_DRIVE_MAX_TQ) tq = -CAL_DRIVE_MAX_TQ;

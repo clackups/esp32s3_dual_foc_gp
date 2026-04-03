@@ -41,12 +41,13 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
  * mechanical revolution forward and backward to build a correction
  * table that compensates for motor construction imperfections and
  * encoder nonlinearity.  Each measurement position is reached via
- * closed-loop drive (overcomes cogging at electrical cycle
- * boundaries) followed by open-loop alignment for precise
- * positioning.  The bidirectional sweep cancels directional bias
- * from motor inertia.  The motor will energise briefly -- keep
- * the shaft unloaded.  Total calibration time ~17 s per motor
- * (7 pole pairs, 40 ms drive + 150 ms settle per step).
+ * closed-loop drive at full torque (overcomes cogging at electrical
+ * cycle boundaries even with high-drop drivers like the L298N)
+ * followed by open-loop alignment for precise positioning.  The
+ * bidirectional sweep cancels directional bias from motor inertia.
+ * The motor will energise briefly -- keep the shaft unloaded.
+ * Total calibration time ~26 s per motor (7 pole pairs, up to
+ * 150 ms drive + 150 ms settle per step).
  */
 esp_err_t foc_calibrate(foc_motor_t *motor);
 
