@@ -34,8 +34,6 @@ static float    s_motor1_strength = HAPTIC_DEFAULT_STRENGTH;
 static float    s_motor2_strength = HAPTIC_DEFAULT_STRENGTH;
 static float    s_motor1_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
 static float    s_motor2_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
-static float    s_motor1_smoothing_alpha = HAPTIC_DEFAULT_SMOOTHING_ALPHA;
-static float    s_motor2_smoothing_alpha = HAPTIC_DEFAULT_SMOOTHING_ALPHA;
 static float    s_motor1_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
 static float    s_motor2_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
 
@@ -87,7 +85,6 @@ static float s_half_range2;
 static void haptic1_task(void *arg)
 {
     (void)arg;
-    float prev_torque = 0.0f;
     for (;;) {
         if (s_continuous_mode) {
             float raw_angle = 0.0f;
@@ -96,7 +93,7 @@ static void haptic1_task(void *arg)
                                     s_motor1_cont_dead_zone,
                                     s_motor1_cont_initial_force,
                                     s_motor1_cont_max_force,
-                                    &raw_angle, &prev_torque);
+                                    &raw_angle);
             /* Continuous HID: deviation from centre mapped linearly. */
             float dev = raw_angle - s_center_angle1;
             if (dev >  (float)M_PI) dev -= 2.0f * (float)M_PI;
@@ -109,7 +106,7 @@ static void haptic1_task(void *arg)
             s_hid1 = (int16_t)v;
         } else {
             uint16_t pos = 0;
-            haptic_update(&s_axis1, &pos, &prev_torque);
+            haptic_update(&s_axis1, &pos);
             s_pos1 = pos;
         }
         xTaskNotifyGive(s_report_task_handle);
@@ -120,7 +117,6 @@ static void haptic1_task(void *arg)
 static void haptic2_task(void *arg)
 {
     (void)arg;
-    float prev_torque = 0.0f;
     for (;;) {
         if (s_continuous_mode) {
             float raw_angle = 0.0f;
@@ -129,7 +125,7 @@ static void haptic2_task(void *arg)
                                     s_motor2_cont_dead_zone,
                                     s_motor2_cont_initial_force,
                                     s_motor2_cont_max_force,
-                                    &raw_angle, &prev_torque);
+                                    &raw_angle);
             float dev = raw_angle - s_center_angle2;
             if (dev >  (float)M_PI) dev -= 2.0f * (float)M_PI;
             if (dev < -(float)M_PI) dev += 2.0f * (float)M_PI;
@@ -141,7 +137,7 @@ static void haptic2_task(void *arg)
             s_hid2 = (int16_t)v;
         } else {
             uint16_t pos = 0;
-            haptic_update(&s_axis2, &pos, &prev_torque);
+            haptic_update(&s_axis2, &pos);
             s_pos2 = pos;
         }
         xTaskNotifyGive(s_report_task_handle);
@@ -317,8 +313,8 @@ void app_main(void)
     ESP_LOGI(TAG, "Zero angle #2: %f", s_foc2.zero_electrical_angle);
 
     ESP_LOGI(TAG, "Setting up haptic axes ...");
-    haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength, s_motor1_dead_zone, s_motor1_smoothing_alpha);
-    haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength, s_motor2_dead_zone, s_motor2_smoothing_alpha);
+    haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength, s_motor1_dead_zone);
+    haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength, s_motor2_dead_zone);
 
     ESP_LOGI(TAG, "Calibrating haptic detent positions ...");
     ESP_ERROR_CHECK(haptic_calibrate(&s_axis1));

@@ -8,8 +8,7 @@
 #include <math.h>
 
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
-                 uint16_t steps, float strength, float dead_zone,
-                 float smoothing_alpha)
+                 uint16_t steps, float strength, float dead_zone)
 {
     axis->motor      = motor;
     axis->steps      = (steps >= 2) ? steps : 2;
@@ -18,14 +17,10 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
     axis->dead_zone  = (dead_zone < 0.0f) ? 0.0f
                      : (dead_zone > 0.49f) ? 0.49f
                      : dead_zone;
-    axis->smoothing_alpha = (smoothing_alpha <= 0.0f) ? 0.01f
-                          : (smoothing_alpha > 1.0f)  ? 1.0f
-                          : smoothing_alpha;
     axis->phase_offset = 0.0f;
 }
 
-esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
-                        float *prev_torque)
+esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position)
 {
     float angle;
     esp_err_t err = foc_read_angle(axis->motor, &angle);
@@ -67,17 +62,6 @@ esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
         torque = gain * (abs_delta - dz_rad) * sign;
         if (torque >  axis->strength) torque =  axis->strength;
         if (torque < -axis->strength) torque = -axis->strength;
-    }
-
-    /*
-     * Exponential moving average smoothing:
-     *   smoothed = alpha * raw + (1 - alpha) * previous
-     * alpha = 1 bypasses smoothing entirely.
-     */
-    if (prev_torque) {
-        torque = axis->smoothing_alpha * torque
-               + (1.0f - axis->smoothing_alpha) * (*prev_torque);
-        *prev_torque = torque;
     }
 
     err = foc_set_torque(axis->motor, torque);
@@ -194,8 +178,7 @@ esp_err_t haptic_continuous_update(haptic_axis_t *axis,
                                    float dead_zone,
                                    float initial_force,
                                    float max_force,
-                                   float *raw_angle,
-                                   float *prev_torque)
+                                   float *raw_angle)
 {
     float angle;
     esp_err_t err = foc_read_angle(axis->motor, &angle);
@@ -235,13 +218,6 @@ esp_err_t haptic_continuous_update(haptic_axis_t *axis,
         float force = initial_force + t * (max_force - initial_force);
         float sign  = (norm >= 0.0f) ? 1.0f : -1.0f;
         torque = force * sign;
-    }
-
-    /* EMA smoothing (same convention as haptic_update). */
-    if (prev_torque) {
-        torque = axis->smoothing_alpha * torque
-               + (1.0f - axis->smoothing_alpha) * (*prev_torque);
-        *prev_torque = torque;
     }
 
     return foc_set_torque(axis->motor, torque);
