@@ -14,7 +14,7 @@
 #define FOC_DEFAULT_POLE_PAIRS 7
 
 /** Number of bins in the electrical-angle correction table.
- *  Populated by foc_calibrate() from a single electrical-cycle sweep. */
+ *  Populated by foc_calibrate() from a full-revolution sweep. */
 #define FOC_CAL_TABLE_SIZE 128
 
 typedef struct {
@@ -37,12 +37,13 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs, float angle_offset);
 
 /**
- * Calibrate the motor: find the electrical zero, then sweep one
- * electrical cycle (~51 deg mechanical) forward and backward to build
- * a correction table that compensates for motor construction
- * imperfections.  The bidirectional sweep cancels directional bias
- * from motor inertia.  The motor will energise briefly -- keep the
- * shaft unloaded.  Total calibration time ~1.2 s per motor.
+ * Calibrate the motor: find the electrical zero, then sweep a full
+ * mechanical revolution forward and backward to build a correction
+ * table that compensates for motor construction imperfections and
+ * encoder nonlinearity.  The bidirectional sweep cancels directional
+ * bias from motor inertia.  The motor will energise briefly -- keep
+ * the shaft unloaded.  Total calibration time ~17 s per motor
+ * (7 pole pairs, 200 ms settle).
  */
 esp_err_t foc_calibrate(foc_motor_t *motor);
 

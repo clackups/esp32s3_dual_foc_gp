@@ -27,20 +27,29 @@
  * electrical cycle.
  *
  * With 6 points the field advances 60 deg electrical per step, giving
- * alignment torque = 0.85 * sin(60 deg) ~= 0.74 -- well above any
- * cogging-torque peak.  The total mechanical travel is only ~43 deg
- * (one electrical cycle / pole_pairs), keeping calibration fast
- * and unobtrusive.
+ * alignment torque = 0.95 * sin(60 deg) ~= 0.82 -- well above any
+ * cogging-torque peak.
  *
- * The measured corrections are tiled across the full 128-bin table
- * using electrical-angle periodicity.  This captures motor
- * construction imperfections exactly (they repeat every electrical
- * cycle) and approximates the slow-varying AS5600 encoder
- * nonlinearity well.                                                  */
+ * The calibration sweeps the FULL mechanical revolution (6 steps *
+ * pole_pairs = 42 steps for a 7-PP motor) instead of a single
+ * electrical cycle.  The measured corrections are interpolated
+ * directly into the 128-bin cal_table by mechanical angle, capturing
+ * both motor construction imperfections (periodic with the electrical
+ * cycle) and the slow-varying AS5600 encoder nonlinearity (periodic
+ * with the full rotation).  The single-cycle tiling approach missed
+ * the encoder nonlinearity, creating ~7 attraction points per
+ * revolution in continuous centering mode.                            */
 #define CAL_ELEC_STEPS    6
 
-/* Milliseconds to let the rotor settle at each alignment point. */
-#define CAL_SETTLE_MS     300
+/* Milliseconds to let the rotor settle at each alignment point.
+ * Each step is 60 deg electrical (~8.6 deg mechanical), so the rotor
+ * only travels a short distance.  200 ms is sufficient for the small
+ * 2804 motor with 0.95 amplitude alignment torque.                    */
+#define CAL_SETTLE_MS     200
+
+/* Maximum supported pole-pair count for the calibration correction
+ * array.  Motors with more pole pairs than this are rejected.         */
+#define CAL_MAX_POLE_PAIRS 14
 
 void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs, float angle_offset)
@@ -115,27 +124,35 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     motor->zero_electrical_angle = fmodf(angle * pp, two_pi);
 
     /*
-     * Phase 2 -- Open-loop sweep over one electrical cycle (~51 deg mech.).
+     * Phase 2 -- Open-loop sweep over the full mechanical revolution.
      *
-     * At each of CAL_ELEC_STEPS positions the stator field is set to a
-     * known electrical angle and the rotor aligns to it.  The step size
-     * (60 deg elec.) provides strong alignment torque that easily overcomes
-     * cogging peaks.  Each correction is the difference between the
+     * The stator field advances 60 deg electrical per step, with
+     * CAL_ELEC_STEPS steps per electrical cycle and pole_pairs cycles
+     * per revolution, for a total of CAL_ELEC_STEPS * pole_pairs
+     * measurements (42 for a 7-PP motor).
+     *
+     * At each position the correction is the difference between the
      * commanded electrical angle and the naive value derived from the
-     * encoder reading.
+     * encoder reading.  Two sweeps -- forward then backward -- are
+     * averaged so that any directional bias from motor inertia or
+     * limited settle time cancels out.
      *
-     * Two sweeps -- forward then backward -- are averaged so that any
-     * directional bias from motor inertia or limited settle time
-     * cancels out.
-     *
-     * Because the motor's construction imperfections repeat every
-     * electrical cycle, the corrections measured here are tiled across
-     * the full 128-bin cal_table by electrical-angle lookup.
+     * The measured corrections are interpolated directly into the
+     * 128-bin cal_table by mechanical angle (no tiling), so both
+     * electrical-periodic errors and encoder nonlinearity are
+     * captured independently at every position.
      */
-    float elec_corr[CAL_ELEC_STEPS];
+    int total_steps = CAL_ELEC_STEPS * (int)motor->pole_pairs;
+    /* Correction at each measurement position.  Maximum
+     * CAL_ELEC_STEPS * CAL_MAX_POLE_PAIRS entries.                */
+    float mech_corr[CAL_ELEC_STEPS * CAL_MAX_POLE_PAIRS];
+    if (total_steps > CAL_ELEC_STEPS * CAL_MAX_POLE_PAIRS) {
+        l298n_coast(motor->driver);
+        return ESP_ERR_NOT_SUPPORTED;
+    }
 
-    /* -- Forward sweep (one electrical cycle) -------------------- */
-    for (int i = 0; i < CAL_ELEC_STEPS; i++) {
+    /* -- Forward sweep (full revolution) ------------------------ */
+    for (int i = 0; i < total_steps; i++) {
         float theta_e = two_pi * (float)i / (float)CAL_ELEC_STEPS;
 
         err = set_field(motor->driver, half, cal_amplitude, theta_e);
@@ -158,11 +175,11 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         float corr   = fmodf(theta_e - naive, two_pi);
         if (corr >  (float)M_PI) corr -= two_pi;
         if (corr < -(float)M_PI) corr += two_pi;
-        elec_corr[i] = corr;
+        mech_corr[i] = corr;
     }
 
-    /* -- Backward sweep -- average with the forward pass ---------- */
-    for (int i = CAL_ELEC_STEPS - 1; i >= 0; i--) {
+    /* -- Backward sweep -- average with the forward pass -------- */
+    for (int i = total_steps - 1; i >= 0; i--) {
         float theta_e = two_pi * (float)i / (float)CAL_ELEC_STEPS;
 
         err = set_field(motor->driver, half, cal_amplitude, theta_e);
@@ -185,21 +202,22 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         float corr   = fmodf(theta_e - naive, two_pi);
         if (corr >  (float)M_PI) corr -= two_pi;
         if (corr < -(float)M_PI) corr += two_pi;
-        elec_corr[i] = (elec_corr[i] + corr) * 0.5f;
+        mech_corr[i] = (mech_corr[i] + corr) * 0.5f;
     }
 
-    /* -- Tile corrections into the 128-bin table by elec. phase -- */
+    /* -- Interpolate into 128-bin table by mechanical angle ------
+     *
+     * Each measurement i is at mechanical angle 2*pi * i / total_steps.
+     * For each table bin j (at 2*pi * j / 128), find the two nearest
+     * measurements and linearly interpolate.                        */
     for (int j = 0; j < FOC_CAL_TABLE_SIZE; j++) {
-        float mech_j = (float)j / (float)FOC_CAL_TABLE_SIZE * two_pi;
-        float phase  = fmodf(mech_j * pp - motor->zero_electrical_angle, two_pi);
-        if (phase < 0.0f) phase += two_pi;
-
-        float pos  = phase / two_pi * (float)CAL_ELEC_STEPS;
-        int   idx0 = (int)floorf(pos) % CAL_ELEC_STEPS;
-        int   idx1 = (idx0 + 1) % CAL_ELEC_STEPS;
+        float pos  = (float)j / (float)FOC_CAL_TABLE_SIZE
+                   * (float)total_steps;
+        int   idx0 = (int)floorf(pos) % total_steps;
+        int   idx1 = (idx0 + 1) % total_steps;
         float frac = pos - floorf(pos);
-        motor->cal_table[j] = elec_corr[idx0]
-                             + frac * (elec_corr[idx1] - elec_corr[idx0]);
+        motor->cal_table[j] = mech_corr[idx0]
+                             + frac * (mech_corr[idx1] - mech_corr[idx0]);
     }
 
     return l298n_coast(motor->driver);
