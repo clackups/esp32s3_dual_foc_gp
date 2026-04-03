@@ -34,15 +34,15 @@
 /** Default dead zone for continuous centering mode, expressed as a
  *  fraction of half_range.  Within this zone around the centre no
  *  restoring force is applied.  Valid range: 0 (disabled) to < 1. */
-#define HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE 0.05f
+#define HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE 0.02f
 
 /** Normalised torque applied immediately when the rotor leaves the
  *  dead zone (0 - 1).  Provides a tactile "step" at the dead-zone
  *  boundary.  Must be <= max_force. */
-#define HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE 0.10f
+#define HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE 0.30f
 
 /** Peak normalised torque at the maximum angle (0 - 1). */
-#define HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE 0.50f
+#define HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE 0.80f
 
 typedef struct {
     foc_motor_t *motor;
