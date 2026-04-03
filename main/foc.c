@@ -32,24 +32,40 @@
  *
  * The calibration sweeps the FULL mechanical revolution (6 steps *
  * pole_pairs = 42 steps for a 7-PP motor) instead of a single
- * electrical cycle.  The measured corrections are interpolated
- * directly into the 128-bin cal_table by mechanical angle, capturing
- * both motor construction imperfections (periodic with the electrical
- * cycle) and the slow-varying AS5600 encoder nonlinearity (periodic
- * with the full rotation).  The single-cycle tiling approach missed
- * the encoder nonlinearity, creating ~7 attraction points per
- * revolution in continuous centering mode.                            */
+ * electrical cycle.  Each measurement position is reached via a
+ * two-phase approach:
+ *   (a) Closed-loop drive: foc_set_torque() pushes the rotor
+ *       toward the target mechanical angle.  This overcomes motor
+ *       cogging reliably at every position, including electrical
+ *       cycle boundaries where the open-loop field wraps.
+ *   (b) Open-loop alignment: set_field() at the known electrical
+ *       angle precisely positions the rotor for the measurement.
+ *
+ * The measured corrections are interpolated directly into the
+ * 128-bin cal_table by mechanical angle, capturing both motor
+ * construction imperfections (periodic with the electrical cycle)
+ * and the slow-varying AS5600 encoder nonlinearity (periodic with
+ * the full rotation).                                                 */
 #define CAL_ELEC_STEPS    6
 
-/* Milliseconds to let the rotor settle at each alignment point.
- * Each step is 60 deg electrical (~8.6 deg mechanical), so the rotor
- * only travels a short distance.  200 ms is sufficient for the small
- * 2804 motor with 0.95 amplitude alignment torque.                    */
-#define CAL_SETTLE_MS     200
+/* Milliseconds to let the rotor settle at each open-loop alignment.
+ * The closed-loop drive brings the rotor close to the target, so
+ * the alignment step only fine-tunes the position.  150 ms is
+ * sufficient for the small 2804 motor at 0.95 amplitude.             */
+#define CAL_SETTLE_MS     150
 
 /* Maximum supported pole-pair count for the calibration correction
  * array.  Motors with more pole pairs than this are rejected.         */
 #define CAL_MAX_POLE_PAIRS 14
+
+/* Duration of the closed-loop drive phase per measurement step (ms).
+ * The motor only needs to advance ~8.6 deg mechanical per step.      */
+#define CAL_DRIVE_MS      40
+
+/* P-control gain and peak torque for the closed-loop drive.
+ * torque = clamp(error_rad * CAL_DRIVE_GAIN, +/-CAL_DRIVE_MAX_TQ).   */
+#define CAL_DRIVE_GAIN    5.0f
+#define CAL_DRIVE_MAX_TQ  0.50f
 
 void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
               uint8_t pole_pairs, float angle_offset)
@@ -124,23 +140,22 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     motor->zero_electrical_angle = fmodf(angle * pp, two_pi);
 
     /*
-     * Phase 2 -- Open-loop sweep over the full mechanical revolution.
+     * Phase 2 -- Full-revolution sweep with closed-loop positioning.
      *
-     * The stator field advances 60 deg electrical per step, with
-     * CAL_ELEC_STEPS steps per electrical cycle and pole_pairs cycles
-     * per revolution, for a total of CAL_ELEC_STEPS * pole_pairs
-     * measurements (42 for a 7-PP motor).
+     * Each measurement position is reached via:
+     *   (a) Closed-loop P-control drive using foc_set_torque()
+     *       (cal_table is all zeros at this point, so commutation
+     *       uses only zero_electrical_angle -- good enough to get
+     *       the rotor near the target).
+     *   (b) Open-loop alignment at the known electrical angle for
+     *       precise positioning and measurement.
      *
-     * At each position the correction is the difference between the
-     * commanded electrical angle and the naive value derived from the
-     * encoder reading.  Two sweeps -- forward then backward -- are
-     * averaged so that any directional bias from motor inertia or
-     * limited settle time cancels out.
+     * Two sweeps -- forward then backward -- are averaged so that
+     * any directional bias from motor inertia cancels out.
      *
-     * The measured corrections are interpolated directly into the
-     * 128-bin cal_table by mechanical angle (no tiling), so both
-     * electrical-periodic errors and encoder nonlinearity are
-     * captured independently at every position.
+     * The corrections are interpolated directly into the 128-bin
+     * cal_table by mechanical angle (no tiling), capturing both
+     * electrical-periodic errors and encoder nonlinearity.
      */
     int total_steps = CAL_ELEC_STEPS * (int)motor->pole_pairs;
     /* Correction at each measurement position.  Maximum
@@ -151,10 +166,44 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         return ESP_ERR_NOT_SUPPORTED;
     }
 
+    /* Starting angle from Phase 1 alignment (rotor at field = 0). */
+    float start_angle;
+    err = read_corrected_angle(motor, &start_angle);
+    if (err != ESP_OK) {
+        l298n_coast(motor->driver);
+        return err;
+    }
+    float step_mech = two_pi / (float)total_steps;
+
     /* -- Forward sweep (full revolution) ------------------------ */
     for (int i = 0; i < total_steps; i++) {
-        float theta_e = two_pi * (float)i / (float)CAL_ELEC_STEPS;
+        /* (a) Closed-loop drive toward target mechanical angle. */
+        float target = start_angle + step_mech * (float)i;
+        for (int t = 0; t < CAL_DRIVE_MS; t++) {
+            float cur;
+            err = read_corrected_angle(motor, &cur);
+            if (err != ESP_OK) {
+                memset(motor->cal_table, 0, sizeof(motor->cal_table));
+                l298n_coast(motor->driver);
+                return err;
+            }
+            float e = target - cur;
+            if (e >  (float)M_PI) e -= two_pi;
+            if (e < -(float)M_PI) e += two_pi;
+            float tq = e * CAL_DRIVE_GAIN;
+            if (tq >  CAL_DRIVE_MAX_TQ) tq =  CAL_DRIVE_MAX_TQ;
+            if (tq < -CAL_DRIVE_MAX_TQ) tq = -CAL_DRIVE_MAX_TQ;
+            err = foc_set_torque(motor, tq);
+            if (err != ESP_OK) {
+                memset(motor->cal_table, 0, sizeof(motor->cal_table));
+                l298n_coast(motor->driver);
+                return err;
+            }
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
 
+        /* (b) Open-loop alignment at the known electrical angle. */
+        float theta_e = two_pi * (float)i / (float)CAL_ELEC_STEPS;
         err = set_field(motor->driver, half, cal_amplitude, theta_e);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
@@ -180,8 +229,31 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
 
     /* -- Backward sweep -- average with the forward pass -------- */
     for (int i = total_steps - 1; i >= 0; i--) {
-        float theta_e = two_pi * (float)i / (float)CAL_ELEC_STEPS;
+        float target = start_angle + step_mech * (float)i;
+        for (int t = 0; t < CAL_DRIVE_MS; t++) {
+            float cur;
+            err = read_corrected_angle(motor, &cur);
+            if (err != ESP_OK) {
+                memset(motor->cal_table, 0, sizeof(motor->cal_table));
+                l298n_coast(motor->driver);
+                return err;
+            }
+            float e = target - cur;
+            if (e >  (float)M_PI) e -= two_pi;
+            if (e < -(float)M_PI) e += two_pi;
+            float tq = e * CAL_DRIVE_GAIN;
+            if (tq >  CAL_DRIVE_MAX_TQ) tq =  CAL_DRIVE_MAX_TQ;
+            if (tq < -CAL_DRIVE_MAX_TQ) tq = -CAL_DRIVE_MAX_TQ;
+            err = foc_set_torque(motor, tq);
+            if (err != ESP_OK) {
+                memset(motor->cal_table, 0, sizeof(motor->cal_table));
+                l298n_coast(motor->driver);
+                return err;
+            }
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
 
+        float theta_e = two_pi * (float)i / (float)CAL_ELEC_STEPS;
         err = set_field(motor->driver, half, cal_amplitude, theta_e);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
