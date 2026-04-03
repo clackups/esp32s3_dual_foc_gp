@@ -24,12 +24,19 @@
  *  Valid range: 0 (disabled) to just below 0.5. */
 #define HAPTIC_DEFAULT_DEAD_ZONE 0.00f
 
-/** Default smoothing factor for exponential moving average on torque.
- *  1.0 = no smoothing (raw torque used directly).
- *  Lower values give heavier smoothing (slower response).
- *  Valid range: 0 (exclusive) to 1 (inclusive); values at or below 0
- *  are clamped to 0.01. */
-#define HAPTIC_DEFAULT_SMOOTHING_ALPHA 0.7f
+/** Default dead zone for continuous centering mode, expressed as a
+ *  fraction of half_range.  Within this zone around the centre no
+ *  restoring force is applied.  Valid range: 0 (disabled) to < 1. */
+#define HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE 0.02f
+
+/** Normalised torque applied immediately when the rotor leaves the
+ *  dead zone (0 - 1).  Set equal to max_force for constant-force
+ *  (bang-bang) centering so the restoring torque always exceeds the
+ *  motor's cogging torque at every position.  Must be <= max_force. */
+#define HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE 0.80f
+
+/** Peak normalised torque at the maximum angle (0 - 1). */
+#define HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE 0.80f
 
 typedef struct {
     foc_motor_t *motor;
@@ -37,7 +44,6 @@ typedef struct {
     float        strength;         /* peak normalised torque (0 - 1)   */
     float        step_angle;       /* 2pi / steps (computed)            */
     float        dead_zone;        /* fraction of step_angle (0-<0.5)  */
-    float        smoothing_alpha;  /* EMA factor (0 < alpha <= 1)           */
     float        phase_offset;     /* angular offset for detent centres */
 } haptic_axis_t;
 
@@ -51,13 +57,9 @@ typedef struct {
  * @param dead_zone Fraction of one step angle that is still treated as
  *                  the neutral (detent-centre) position.  0 disables
  *                  the dead zone; values are clamped below 0.5.
- * @param smoothing_alpha  EMA smoothing factor (0 < alpha <= 1).
- *                         1.0 = no smoothing; values <= 0 are clamped
- *                         to 0.01, values > 1 are clamped to 1.
  */
 void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
-                 uint16_t steps, float strength, float dead_zone,
-                 float smoothing_alpha);
+                 uint16_t steps, float strength, float dead_zone);
 
 /**
  * Run one tick of the haptic loop: read angle, compute nearest detent,
@@ -68,14 +70,9 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
  * @param axis  Initialised axis.
  * @param[out] position  If non-NULL, receives the current step index
  *                       (0 ... steps-1).
- * @param[in,out] prev_torque  Pointer to the previous smoothed torque.
- *                             Read for EMA input, written with the new
- *                             smoothed value.  Caller should initialise
- *                             to 0 before the first call.
  * @return ESP_OK on success.
  */
-esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position,
-                        float *prev_torque);
+esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position);
 
 /**
  * Calibrate the detent phase offset.
@@ -106,3 +103,35 @@ esp_err_t haptic_calibrate(haptic_axis_t *axis);
  * @return ESP_OK on success.
  */
 esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent);
+
+/**
+ * Run one tick of the continuous centering loop.
+ *
+ * Instead of haptic detents the motor applies a linear restoring
+ * force toward @p center_angle.  The force profile is:
+ *
+ *   |error| <= dead_zone * half_range  ->  torque = 0
+ *   |error| just outside dead zone     ->  torque = initial_force
+ *   |error| == half_range              ->  torque = max_force
+ *
+ * Between the dead-zone boundary and half_range the torque ramps
+ * linearly from initial_force to max_force.  The sign of the torque
+ * matches the sign of the error (toward centre).
+ *
+ * @param axis           Initialised axis (motor must be calibrated).
+ * @param center_angle   Target centre angle in radians.
+ * @param half_range     Half of the total angular travel (radians).
+ * @param dead_zone      Dead zone as a fraction of half_range (0-<1).
+ * @param initial_force  Normalised torque at the dead-zone edge (0-1).
+ * @param max_force      Peak normalised torque at half_range (0-1).
+ * @param[out] raw_angle   If non-NULL, receives the current mechanical
+ *                         angle in radians.
+ * @return ESP_OK on success.
+ */
+esp_err_t haptic_continuous_update(haptic_axis_t *axis,
+                                   float center_angle,
+                                   float half_range,
+                                   float dead_zone,
+                                   float initial_force,
+                                   float max_force,
+                                   float *raw_angle);
