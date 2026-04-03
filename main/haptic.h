@@ -37,9 +37,10 @@
 #define HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE 0.02f
 
 /** Normalised torque applied immediately when the rotor leaves the
- *  dead zone (0 - 1).  Provides a tactile "step" at the dead-zone
- *  boundary.  Must be <= max_force. */
-#define HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE 0.30f
+ *  dead zone (0 - 1).  Set equal to max_force for constant-force
+ *  (bang-bang) centering so the restoring torque always exceeds the
+ *  motor's cogging torque at every position.  Must be <= max_force. */
+#define HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE 0.80f
 
 /** Peak normalised torque at the maximum angle (0 - 1). */
 #define HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE 0.80f

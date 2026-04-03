@@ -172,6 +172,13 @@ static void button_task(void *arg)
             s_continuous_mode = !s_continuous_mode;
             ESP_LOGI(TAG, "Mode toggled: %s",
                      s_continuous_mode ? "continuous" : "haptic");
+            /* Status LED: yellow = continuous, green = haptic. */
+            if (s_continuous_mode) {
+                led_strip_set_pixel(s_status_led, 0, 32, 32, 0); /* yellow */
+            } else {
+                led_strip_set_pixel(s_status_led, 0, 0, 32, 0);  /* green */
+            }
+            led_strip_refresh(s_status_led);
         }
         prev_toggle_level = toggle_level;
 
