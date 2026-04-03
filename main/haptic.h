@@ -31,10 +31,18 @@
  *  are clamped to 0.01. */
 #define HAPTIC_DEFAULT_SMOOTHING_ALPHA 0.7f
 
-/** Default peak normalised torque for continuous (non-haptic) centering
- *  mode.  The restoring force follows a quadratic curve so that it
- *  grows gently near the centre and strongly at the edges. */
-#define HAPTIC_DEFAULT_CONTINUOUS_STRENGTH 0.50f
+/** Default dead zone for continuous centering mode, expressed as a
+ *  fraction of half_range.  Within this zone around the centre no
+ *  restoring force is applied.  Valid range: 0 (disabled) to < 1. */
+#define HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE 0.05f
+
+/** Normalised torque applied immediately when the rotor leaves the
+ *  dead zone (0 - 1).  Provides a tactile "step" at the dead-zone
+ *  boundary.  Must be <= max_force. */
+#define HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE 0.10f
+
+/** Peak normalised torque at the maximum angle (0 - 1). */
+#define HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE 0.50f
 
 typedef struct {
     foc_motor_t *motor;
@@ -115,28 +123,33 @@ esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent);
 /**
  * Run one tick of the continuous centering loop.
  *
- * Instead of haptic detents the motor applies a smooth quadratic
- * restoring force toward @p center_angle.  The force magnitude grows
- * with the square of the angular deviation from centre:
+ * Instead of haptic detents the motor applies a linear restoring
+ * force toward @p center_angle.  The force profile is:
  *
- *   torque = strength * (error / half_range)^2 * sign(error)
+ *   |error| <= dead_zone * half_range  ->  torque = 0
+ *   |error| just outside dead zone     ->  torque = initial_force
+ *   |error| == half_range              ->  torque = max_force
  *
- * where error = center_angle - current_angle (wrapped to +/-pi) and
- * half_range defines the angular distance at which the force reaches
- * its maximum.  Values outside +/-half_range are clamped.
+ * Between the dead-zone boundary and half_range the torque ramps
+ * linearly from initial_force to max_force.  The sign of the torque
+ * matches the sign of the error (toward centre).
  *
- * @param axis          Initialised axis (motor must be calibrated).
- * @param center_angle  Target centre angle in radians.
- * @param half_range    Half of the total angular travel (radians).
- * @param strength      Peak normalised torque (0 - 1).
- * @param[out] raw_angle  If non-NULL, receives the current mechanical
- *                        angle in radians.
+ * @param axis           Initialised axis (motor must be calibrated).
+ * @param center_angle   Target centre angle in radians.
+ * @param half_range     Half of the total angular travel (radians).
+ * @param dead_zone      Dead zone as a fraction of half_range (0-<1).
+ * @param initial_force  Normalised torque at the dead-zone edge (0-1).
+ * @param max_force      Peak normalised torque at half_range (0-1).
+ * @param[out] raw_angle   If non-NULL, receives the current mechanical
+ *                         angle in radians.
  * @param[in,out] prev_torque  EMA state -- see haptic_update().
  * @return ESP_OK on success.
  */
 esp_err_t haptic_continuous_update(haptic_axis_t *axis,
                                    float center_angle,
                                    float half_range,
-                                   float strength,
+                                   float dead_zone,
+                                   float initial_force,
+                                   float max_force,
                                    float *raw_angle,
                                    float *prev_torque);

@@ -191,7 +191,9 @@ esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent)
 esp_err_t haptic_continuous_update(haptic_axis_t *axis,
                                    float center_angle,
                                    float half_range,
-                                   float strength,
+                                   float dead_zone,
+                                   float initial_force,
+                                   float max_force,
                                    float *raw_angle,
                                    float *prev_torque)
 {
@@ -211,11 +213,29 @@ esp_err_t haptic_continuous_update(haptic_axis_t *axis,
     if (norm >  1.0f) norm =  1.0f;
     if (norm < -1.0f) norm = -1.0f;
 
-    /* Quadratic restoring torque: magnitude grows with the square of
-     * the distance from centre while preserving the sign.
-     *   torque = strength * norm * |norm|                             */
     float abs_norm = fabsf(norm);
-    float torque   = strength * norm * abs_norm;
+    float torque;
+
+    /* Clamp dead_zone to a safe range. */
+    if (dead_zone < 0.0f) dead_zone = 0.0f;
+    if (dead_zone > 0.99f) dead_zone = 0.99f;
+
+    if (abs_norm <= dead_zone) {
+        /* Inside the dead zone -- no restoring force. */
+        torque = 0.0f;
+    } else {
+        /* Linear ramp from initial_force at the dead-zone edge to
+         * max_force at |norm| == 1 (full half_range).
+         *
+         *   active_range = 1 - dead_zone
+         *   t = (|norm| - dead_zone) / active_range   (0 at edge, 1 at max)
+         *   force = initial_force + t * (max_force - initial_force)        */
+        float active_range = 1.0f - dead_zone;
+        float t = (abs_norm - dead_zone) / active_range;
+        float force = initial_force + t * (max_force - initial_force);
+        float sign  = (norm >= 0.0f) ? 1.0f : -1.0f;
+        torque = force * sign;
+    }
 
     /* EMA smoothing (same convention as haptic_update). */
     if (prev_torque) {

@@ -40,8 +40,12 @@ static float    s_motor1_angle_offset = 0.0f;  /* magnet mounting offset (rad) *
 static float    s_motor2_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
 
 /* -- Continuous centering mode variables ----------------------------- */
-static float    s_motor1_continuous_strength = HAPTIC_DEFAULT_CONTINUOUS_STRENGTH;
-static float    s_motor2_continuous_strength = HAPTIC_DEFAULT_CONTINUOUS_STRENGTH;
+static float    s_motor1_cont_dead_zone     = HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE;
+static float    s_motor2_cont_dead_zone     = HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE;
+static float    s_motor1_cont_initial_force = HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE;
+static float    s_motor2_cont_initial_force = HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE;
+static float    s_motor1_cont_max_force     = HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE;
+static float    s_motor2_cont_max_force     = HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE;
 
 /* -- Button GPIO table ----------------------------------------------- */
 static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
@@ -89,7 +93,9 @@ static void haptic1_task(void *arg)
             float raw_angle = 0.0f;
             haptic_continuous_update(&s_axis1,
                                     s_center_angle1, s_half_range1,
-                                    s_motor1_continuous_strength,
+                                    s_motor1_cont_dead_zone,
+                                    s_motor1_cont_initial_force,
+                                    s_motor1_cont_max_force,
                                     &raw_angle, &prev_torque);
             /* Continuous HID: deviation from centre mapped linearly. */
             float dev = raw_angle - s_center_angle1;
@@ -120,7 +126,9 @@ static void haptic2_task(void *arg)
             float raw_angle = 0.0f;
             haptic_continuous_update(&s_axis2,
                                     s_center_angle2, s_half_range2,
-                                    s_motor2_continuous_strength,
+                                    s_motor2_cont_dead_zone,
+                                    s_motor2_cont_initial_force,
+                                    s_motor2_cont_max_force,
                                     &raw_angle, &prev_torque);
             float dev = raw_angle - s_center_angle2;
             if (dev >  (float)M_PI) dev -= 2.0f * (float)M_PI;
