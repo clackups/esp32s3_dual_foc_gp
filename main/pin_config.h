@@ -59,4 +59,4 @@
 
 /* -- LEDC PWM settings (shared by all motor channels) ---------------- */
 #define MOTOR_PWM_FREQ_HZ   20000
-#define MOTOR_PWM_RESOLUTION LEDC_TIMER_10_BIT  /* 0-1023 duty range */
+#define MOTOR_PWM_RESOLUTION LEDC_TIMER_11_BIT  /* 0-2048 duty range */
