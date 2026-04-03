@@ -1,12 +1,12 @@
 /*
  * foc.h -- Three-phase field-oriented control for BLDC motors
- *         driven through Mini L298N boards (PWM on IN1-IN3).
+ *         driven through TMC6300 gate drivers (PWM on UH/VH/WH).
  */
 
 #pragma once
 
 #include "as5600.h"
-#include "l298n.h"
+#include "tmc6300.h"
 #include <stdint.h>
 
 /** Number of magnetic pole pairs.  The 2804 BLDC motor (14 poles /
@@ -18,22 +18,22 @@
 #define FOC_CAL_TABLE_SIZE 128
 
 typedef struct {
-    as5600_t *encoder;
-    l298n_t  *driver;
-    uint8_t   pole_pairs;
-    float     angle_offset;                     /* manual magnet-mounting offset (rad) */
-    float     zero_electrical_angle;            /* calibration offset (rad) */
-    float     cal_table[FOC_CAL_TABLE_SIZE];    /* per-bin elec. angle correction */
+    as5600_t   *encoder;
+    tmc6300_t  *driver;
+    uint8_t     pole_pairs;
+    float       angle_offset;                     /* manual magnet-mounting offset (rad) */
+    float       zero_electrical_angle;            /* calibration offset (rad) */
+    float       cal_table[FOC_CAL_TABLE_SIZE];    /* per-bin elec. angle correction */
 } foc_motor_t;
 
 /**
  * Initialise and link an encoder + driver pair.
- * Call after as5600_init() and l298n_init().
+ * Call after as5600_init() and tmc6300_init().
  *
  * @param angle_offset  Signed magnet-mounting offset in radians,
  *                      added to every raw AS5600 reading.
  */
-void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
+void foc_init(foc_motor_t *motor, as5600_t *encoder, tmc6300_t *driver,
               uint8_t pole_pairs, float angle_offset);
 
 /**
@@ -42,9 +42,9 @@ void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
  * table that compensates for motor construction imperfections and
  * encoder nonlinearity.  Each measurement position is reached via
  * closed-loop drive at full torque (overcomes cogging at electrical
- * cycle boundaries even with high-drop drivers like the L298N)
- * followed by open-loop alignment for precise positioning.  The
- * bidirectional sweep cancels directional bias from motor inertia.
+ * cycle boundaries) followed by open-loop alignment for precise
+ * positioning.  The bidirectional sweep cancels directional bias
+ * from motor inertia.
  * The motor will energise briefly -- keep the shaft unloaded.
  * Total calibration time ~26 s per motor (7 pole pairs, up to
  * 150 ms drive + 150 ms settle per step).

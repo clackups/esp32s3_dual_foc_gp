@@ -2,7 +2,7 @@
  * foc.c -- Three-phase field-oriented control for 2804 BLDC motors
  *         (3 coil inputs, 7 pole pairs).
  *
- * The Mini L298N drives all three coils (U, V, W) with sinusoidal
+ * The TMC6300 drives all three phases (U, V, W) with sinusoidal
  * PWM 120 deg apart:
  *
  *   duty_u = half + half * amplitude * sin(theta_e + 90 deg)
@@ -59,16 +59,14 @@
 #define CAL_MAX_POLE_PAIRS 14
 
 /* Maximum duration of the closed-loop drive phase per step (ms).
- * Must be long enough for the L298N (with its ~2 V bipolar drop)
- * to push the rotor past the halfway point between open-loop
- * alignment equilibria at every electrical-cycle boundary.  The
- * loop exits early once the position error is small enough.          */
+ * Must be long enough to push the rotor past the halfway point
+ * between open-loop alignment equilibria at every electrical-cycle
+ * boundary.  The loop exits early once the position error is small
+ * enough.                                                           */
 #define CAL_DRIVE_MS      150
 
 /* P-control gain and peak torque for the closed-loop drive.
- * torque = clamp(error_rad * CAL_DRIVE_GAIN, +/-CAL_DRIVE_MAX_TQ).
- * Using full torque (0.95) ensures the L298N can overcome cogging
- * peaks even with its reduced output voltage.                        */
+ * torque = clamp(error_rad * CAL_DRIVE_GAIN, +/-CAL_DRIVE_MAX_TQ).  */
 #define CAL_DRIVE_GAIN    5.0f
 #define CAL_DRIVE_MAX_TQ  0.95f
 
@@ -77,7 +75,7 @@
  * of attraction of the subsequent open-loop alignment.               */
 #define CAL_DRIVE_CONVERGE_RAD  0.009f
 
-void foc_init(foc_motor_t *motor, as5600_t *encoder, l298n_t *driver,
+void foc_init(foc_motor_t *motor, as5600_t *encoder, tmc6300_t *driver,
               uint8_t pole_pairs, float angle_offset)
 {
     motor->encoder               = encoder;
@@ -110,7 +108,7 @@ static esp_err_t read_corrected_angle(const foc_motor_t *motor,
  * Helper: set three-phase PWM from a field angle and amplitude.
  * Computes sinusoidal duties, clamps to [0, max_duty], and writes.
  * ----------------------------------------------------------------- */
-static esp_err_t set_field(const l298n_t *drv, uint32_t half,
+static esp_err_t set_field(const tmc6300_t *drv, uint32_t half,
                            float amplitude, float field_angle)
 {
     float du = half + half * amplitude * sinf(field_angle);
@@ -119,9 +117,9 @@ static esp_err_t set_field(const l298n_t *drv, uint32_t half,
     if (du < 0.0f) du = 0.0f;
     if (dv < 0.0f) dv = 0.0f;
     if (dw < 0.0f) dw = 0.0f;
-    return l298n_set_three_phase(drv, (uint32_t)(du + 0.5f),
-                                     (uint32_t)(dv + 0.5f),
-                                     (uint32_t)(dw + 0.5f));
+    return tmc6300_set_three_phase(drv, (uint32_t)(du + 0.5f),
+                                      (uint32_t)(dv + 0.5f),
+                                      (uint32_t)(dw + 0.5f));
 }
 
 esp_err_t foc_calibrate(foc_motor_t *motor)
@@ -143,7 +141,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     float angle;
     err = read_corrected_angle(motor, &angle);
     if (err != ESP_OK) {
-        l298n_coast(motor->driver);
+        tmc6300_coast(motor->driver);
         return err;
     }
 
@@ -172,7 +170,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
      * CAL_ELEC_STEPS * CAL_MAX_POLE_PAIRS entries.                */
     float mech_corr[CAL_ELEC_STEPS * CAL_MAX_POLE_PAIRS];
     if (total_steps > CAL_ELEC_STEPS * CAL_MAX_POLE_PAIRS) {
-        l298n_coast(motor->driver);
+        tmc6300_coast(motor->driver);
         return ESP_ERR_NOT_SUPPORTED;
     }
 
@@ -180,7 +178,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     float start_angle;
     err = read_corrected_angle(motor, &start_angle);
     if (err != ESP_OK) {
-        l298n_coast(motor->driver);
+        tmc6300_coast(motor->driver);
         return err;
     }
     float step_mech = two_pi / (float)total_steps;
@@ -194,7 +192,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
             err = read_corrected_angle(motor, &cur);
             if (err != ESP_OK) {
                 memset(motor->cal_table, 0, sizeof(motor->cal_table));
-                l298n_coast(motor->driver);
+                tmc6300_coast(motor->driver);
                 return err;
             }
             float e = target - cur;
@@ -209,7 +207,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
             err = foc_set_torque(motor, tq);
             if (err != ESP_OK) {
                 memset(motor->cal_table, 0, sizeof(motor->cal_table));
-                l298n_coast(motor->driver);
+                tmc6300_coast(motor->driver);
                 return err;
             }
             vTaskDelay(pdMS_TO_TICKS(1));
@@ -220,7 +218,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         err = set_field(motor->driver, half, cal_amplitude, theta_e);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
-            l298n_coast(motor->driver);
+            tmc6300_coast(motor->driver);
             return err;
         }
         vTaskDelay(pdMS_TO_TICKS(CAL_SETTLE_MS));
@@ -229,7 +227,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         err = read_corrected_angle(motor, &mech);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
-            l298n_coast(motor->driver);
+            tmc6300_coast(motor->driver);
             return err;
         }
 
@@ -248,7 +246,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
             err = read_corrected_angle(motor, &cur);
             if (err != ESP_OK) {
                 memset(motor->cal_table, 0, sizeof(motor->cal_table));
-                l298n_coast(motor->driver);
+                tmc6300_coast(motor->driver);
                 return err;
             }
             float e = target - cur;
@@ -263,7 +261,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
             err = foc_set_torque(motor, tq);
             if (err != ESP_OK) {
                 memset(motor->cal_table, 0, sizeof(motor->cal_table));
-                l298n_coast(motor->driver);
+                tmc6300_coast(motor->driver);
                 return err;
             }
             vTaskDelay(pdMS_TO_TICKS(1));
@@ -273,7 +271,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         err = set_field(motor->driver, half, cal_amplitude, theta_e);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
-            l298n_coast(motor->driver);
+            tmc6300_coast(motor->driver);
             return err;
         }
         vTaskDelay(pdMS_TO_TICKS(CAL_SETTLE_MS));
@@ -282,7 +280,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         err = read_corrected_angle(motor, &mech);
         if (err != ESP_OK) {
             memset(motor->cal_table, 0, sizeof(motor->cal_table));
-            l298n_coast(motor->driver);
+            tmc6300_coast(motor->driver);
             return err;
         }
 
@@ -308,7 +306,7 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
                              + frac * (mech_corr[idx1] - mech_corr[idx0]);
     }
 
-    return l298n_coast(motor->driver);
+    return tmc6300_coast(motor->driver);
 }
 
 esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
@@ -344,7 +342,7 @@ esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
     if (dv_f < 0.0f) dv_f = 0.0f;
     if (dw_f < 0.0f) dw_f = 0.0f;
 
-    return l298n_set_three_phase(motor->driver,
+    return tmc6300_set_three_phase(motor->driver,
                                  (uint32_t)(du_f + 0.5f),
                                  (uint32_t)(dv_f + 0.5f),
                                  (uint32_t)(dw_f + 0.5f));
@@ -352,7 +350,7 @@ esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
 
 esp_err_t foc_coast(foc_motor_t *motor)
 {
-    return l298n_coast(motor->driver);
+    return tmc6300_coast(motor->driver);
 }
 
 esp_err_t foc_read_angle(const foc_motor_t *motor, float *angle_rad)

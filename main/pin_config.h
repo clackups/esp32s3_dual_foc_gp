@@ -9,21 +9,21 @@
 
 /*
  * Motor wiring (2804 BLDC, 3 coil inputs U/V/W):
- *   Mini L298N board -- no ENA/ENB; PWM goes directly on IN1-IN3.
- *   IN1 (PWM) -> OUT1 -> Coil U
- *   IN2 (PWM) -> OUT2 -> Coil V
- *   IN3 (PWM) -> OUT3 -> Coil W
+ *   TMC6300 -- three-phase MOSFET gate driver; PWM on UH/VH/WH.
+ *   UH (PWM) -> Phase U high-side gate
+ *   VH (PWM) -> Phase V high-side gate
+ *   WH (PWM) -> Phase W high-side gate
  */
 
-/* -- Motor 1 -- Mini L298N #1 ---------------------------------------- */
-#define MOTOR1_IN1_GPIO     1   /* Coil U - PWM */
-#define MOTOR1_IN2_GPIO     2   /* Coil V - PWM */
-#define MOTOR1_IN3_GPIO     3   /* Coil W - PWM */
+/* -- Motor 1 -- TMC6300 #1 ------------------------------------------- */
+#define MOTOR1_UH_GPIO      1   /* Phase U - PWM */
+#define MOTOR1_VH_GPIO      2   /* Phase V - PWM */
+#define MOTOR1_WH_GPIO      3   /* Phase W - PWM */
 
-/* -- Motor 2 -- Mini L298N #2 ---------------------------------------- */
-#define MOTOR2_IN1_GPIO     15  /* Coil U - PWM */
-#define MOTOR2_IN2_GPIO     16  /* Coil V - PWM */
-#define MOTOR2_IN3_GPIO     17  /* Coil W - PWM */
+/* -- Motor 2 -- TMC6300 #2 ------------------------------------------- */
+#define MOTOR2_UH_GPIO      15  /* Phase U - PWM */
+#define MOTOR2_VH_GPIO      16  /* Phase V - PWM */
+#define MOTOR2_WH_GPIO      17  /* Phase W - PWM */
 
 /* -- Game controller buttons (active-low, internal pull-up) ---------- */
 #define BUTTON_COUNT        10

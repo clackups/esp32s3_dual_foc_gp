@@ -8,7 +8,7 @@
 
 #include "pin_config.h"
 #include "as5600.h"
-#include "l298n.h"
+#include "tmc6300.h"
 #include "foc.h"
 #include "haptic.h"
 #include "usb_gamepad.h"
@@ -54,7 +54,7 @@ static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
 
 /* -- Hardware instances ---------------------------------------------- */
 static as5600_t      s_enc1, s_enc2;
-static l298n_t       s_drv1, s_drv2;
+static tmc6300_t     s_drv1, s_drv2;
 static foc_motor_t   s_foc1, s_foc2;
 static haptic_axis_t s_axis1, s_axis2;
 static led_strip_handle_t s_status_led;
@@ -293,16 +293,18 @@ void app_main(void)
     }
 
     ESP_LOGI(TAG, "Initialising motor drivers ...");
-    ESP_ERROR_CHECK(l298n_init(&s_drv1, LEDC_TIMER_0,
-                               MOTOR1_IN1_GPIO, MOTOR1_IN2_GPIO,
-                               MOTOR1_IN3_GPIO,
-                               LEDC_CHANNEL_0,
-                               MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
-    ESP_ERROR_CHECK(l298n_init(&s_drv2, LEDC_TIMER_1,
-                               MOTOR2_IN1_GPIO, MOTOR2_IN2_GPIO,
-                               MOTOR2_IN3_GPIO,
-                               LEDC_CHANNEL_3,
-                               MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
+    ESP_ERROR_CHECK(tmc6300_init(&s_drv1, LEDC_TIMER_0,
+                                 MOTOR1_UH_GPIO, MOTOR1_VH_GPIO,
+                                 MOTOR1_WH_GPIO,
+                                 LEDC_CHANNEL_0,
+                                 MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION,
+                                 -1));
+    ESP_ERROR_CHECK(tmc6300_init(&s_drv2, LEDC_TIMER_1,
+                                 MOTOR2_UH_GPIO, MOTOR2_VH_GPIO,
+                                 MOTOR2_WH_GPIO,
+                                 LEDC_CHANNEL_3,
+                                 MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION,
+                                 -1));
 
     ESP_LOGI(TAG, "Calibrating FOC ...");
     foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS, s_motor1_angle_offset);

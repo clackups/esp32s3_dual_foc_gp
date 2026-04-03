@@ -3,16 +3,16 @@
 USB game controller for ESP32-S3 where two axes are controlled by two
 **2804 BLDC motors** (3 coil inputs, 7 pole pairs) coupled with AS5600
 magnetic encoders, providing haptic detent feedback through the motor
-torque.  The motors are driven by Mini L298N dual-H-bridge boards.  Each
-motor axis has a separately configurable number of haptic steps per
-full revolution.
+torque.  The motors are driven by TMC6300 three-phase MOSFET gate
+drivers.  Each motor axis has a separately configurable number of haptic
+steps per full revolution.
 
 ## Hardware
 
 | Component | Qty | Notes |
 |-----------|-----|-------|
 | ESP32-S3 DevKit | 1 | Any board with native USB-OTG |
-| Mini L298N board | 2 | One per BLDC motor (no ENA/ENB) |
+| TMC6300 board | 2 | One per BLDC motor (3-phase gate driver) |
 | 2804 BLDC motor | 2 | 3 coil inputs (U/V/W), 7 pole pairs (14P/12N) |
 | AS5600 magnetic encoder | 2 | One per motor, on separate I2C buses |
 | Diametric magnet | 2 | Attached to each motor shaft |
@@ -25,12 +25,12 @@ changed there without modifying any other file.
 
 | Signal | GPIO | Description |
 |--------|------|-------------|
-| MOTOR1_IN1  | 1  | Motor 1 coil U - Mini L298N IN1 (PWM) |
-| MOTOR1_IN2  | 2  | Motor 1 coil V - Mini L298N IN2 (PWM) |
-| MOTOR1_IN3  | 3  | Motor 1 coil W - Mini L298N IN3 (PWM) |
-| MOTOR2_IN1  | 15 | Motor 2 coil U - Mini L298N IN1 (PWM) |
-| MOTOR2_IN2  | 16 | Motor 2 coil V - Mini L298N IN2 (PWM) |
-| MOTOR2_IN3  | 17 | Motor 2 coil W - Mini L298N IN3 (PWM) |
+| MOTOR1_UH   | 1  | Motor 1 phase U - TMC6300 UH (PWM) |
+| MOTOR1_VH   | 2  | Motor 1 phase V - TMC6300 VH (PWM) |
+| MOTOR1_WH   | 3  | Motor 1 phase W - TMC6300 WH (PWM) |
+| MOTOR2_UH   | 15 | Motor 2 phase U - TMC6300 UH (PWM) |
+| MOTOR2_VH   | 16 | Motor 2 phase V - TMC6300 VH (PWM) |
+| MOTOR2_WH   | 17 | Motor 2 phase W - TMC6300 WH (PWM) |
 | BUTTON0     | 4  | Game controller button 0 (active-low)  |
 | BUTTON1     | 5  | Game controller button 1 (active-low)  |
 | BUTTON2     | 6  | Game controller button 2 (active-low)  |
@@ -52,13 +52,13 @@ require no additional configuration.
 
 ### Motor wiring (2804 BLDC -- 3 coil inputs)
 
-Each 2804 motor has three coil wires (U, V, W).  A single Mini L298N
-drives the three motor coils via IN1-IN3:
+Each 2804 motor has three coil wires (U, V, W).  A single TMC6300
+drives the three motor phases via its half-bridge outputs:
 
 ```
-  IN1 (PWM) --> OUT1 --> Coil U
-  IN2 (PWM) --> OUT2 --> Coil V
-  IN3 (PWM) --> OUT3 --> Coil W
+  UH (PWM) --> Phase U high-side gate
+  VH (PWM) --> Phase V high-side gate
+  WH (PWM) --> Phase W high-side gate
 ```
 
 The firmware drives all three coils with sinusoidal PWM (120 deg apart)
@@ -130,7 +130,7 @@ that one file.
     |-- idf_component.yml   IDF Component Registry dependencies
     |-- pin_config.h        *** All GPIO assignments ***
     |-- as5600.h / .c       AS5600 I2C encoder driver
-    |-- l298n.h / .c        Mini L298N PWM motor driver (3-phase)
+    |-- tmc6300.h / .c      TMC6300 PWM motor driver (3-phase)
     |-- foc.h / .c          Three-phase sinusoidal FOC
     |-- haptic.h / .c       Haptic detent engine
     |-- usb_gamepad.h / .c  USB HID gamepad (TinyUSB)
@@ -145,8 +145,8 @@ that one file.
 
 2. **FOC torque control** -- A three-phase FOC algorithm converts a
    desired torque command into sinusoidal phase voltages (120 deg apart)
-   for the 2804 motor's coils U, V, and W.  The Mini L298N drives
-   all three phases via PWM on IN1-IN3.
+   for the 2804 motor's coils U, V, and W.  The TMC6300 drives
+   all three phases via PWM on UH, VH, and WH.
 
 3. **Haptic detents** -- The haptic engine divides one full rotation
    into N equal steps and applies a spring-like restoring torque toward
