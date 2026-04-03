@@ -31,6 +31,11 @@
  *  are clamped to 0.01. */
 #define HAPTIC_DEFAULT_SMOOTHING_ALPHA 0.7f
 
+/** Default peak normalised torque for continuous (non-haptic) centering
+ *  mode.  The restoring force follows a quadratic curve so that it
+ *  grows gently near the centre and strongly at the edges. */
+#define HAPTIC_DEFAULT_CONTINUOUS_STRENGTH 0.50f
+
 typedef struct {
     foc_motor_t *motor;
     uint16_t     steps;            /* detent positions per revolution  */
@@ -106,3 +111,32 @@ esp_err_t haptic_calibrate(haptic_axis_t *axis);
  * @return ESP_OK on success.
  */
 esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent);
+
+/**
+ * Run one tick of the continuous centering loop.
+ *
+ * Instead of haptic detents the motor applies a smooth quadratic
+ * restoring force toward @p center_angle.  The force magnitude grows
+ * with the square of the angular deviation from centre:
+ *
+ *   torque = strength * (error / half_range)^2 * sign(error)
+ *
+ * where error = center_angle - current_angle (wrapped to +/-pi) and
+ * half_range defines the angular distance at which the force reaches
+ * its maximum.  Values outside +/-half_range are clamped.
+ *
+ * @param axis          Initialised axis (motor must be calibrated).
+ * @param center_angle  Target centre angle in radians.
+ * @param half_range    Half of the total angular travel (radians).
+ * @param strength      Peak normalised torque (0 - 1).
+ * @param[out] raw_angle  If non-NULL, receives the current mechanical
+ *                        angle in radians.
+ * @param[in,out] prev_torque  EMA state -- see haptic_update().
+ * @return ESP_OK on success.
+ */
+esp_err_t haptic_continuous_update(haptic_axis_t *axis,
+                                   float center_angle,
+                                   float half_range,
+                                   float strength,
+                                   float *raw_angle,
+                                   float *prev_torque);

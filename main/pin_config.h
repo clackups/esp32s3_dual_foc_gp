@@ -51,6 +51,9 @@
 /* -- I2C bus speed (shared by both encoders) ------------------------- */
 #define ENCODER_I2C_FREQ_HZ 400000
 
+/* -- Mode toggle (haptic <-> continuous, active-low, internal pull-up) - */
+#define MODE_TOGGLE_GPIO    35
+
 /* -- Status LED (WS2812 on GPIO 48) ---------------------------------- */
 #define STATUS_LED_GPIO     48
 

@@ -185,3 +185,44 @@ esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent)
 
     return foc_coast(axis->motor);
 }
+
+/* -- Continuous centering mode --------------------------------------- */
+
+esp_err_t haptic_continuous_update(haptic_axis_t *axis,
+                                   float center_angle,
+                                   float half_range,
+                                   float strength,
+                                   float *raw_angle,
+                                   float *prev_torque)
+{
+    float angle;
+    esp_err_t err = foc_read_angle(axis->motor, &angle);
+    if (err != ESP_OK) return err;
+
+    if (raw_angle) *raw_angle = angle;
+
+    /* Signed error from centre, wrapped to -pi ... +pi. */
+    float error = center_angle - angle;
+    if (error >  (float)M_PI) error -= 2.0f * (float)M_PI;
+    if (error < -(float)M_PI) error += 2.0f * (float)M_PI;
+
+    /* Normalise to [-1, +1] and clamp. */
+    float norm = (half_range > 1e-6f) ? (error / half_range) : 0.0f;
+    if (norm >  1.0f) norm =  1.0f;
+    if (norm < -1.0f) norm = -1.0f;
+
+    /* Quadratic restoring torque: magnitude grows with the square of
+     * the distance from centre while preserving the sign.
+     *   torque = strength * norm * |norm|                             */
+    float abs_norm = (norm >= 0.0f) ? norm : -norm;
+    float torque   = strength * norm * abs_norm;
+
+    /* EMA smoothing (same convention as haptic_update). */
+    if (prev_torque) {
+        torque = axis->smoothing_alpha * torque
+               + (1.0f - axis->smoothing_alpha) * (*prev_torque);
+        *prev_torque = torque;
+    }
+
+    return foc_set_torque(axis->motor, torque);
+}
