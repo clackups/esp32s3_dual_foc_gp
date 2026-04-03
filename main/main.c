@@ -349,7 +349,7 @@ void app_main(void)
     xTaskCreatePinnedToCore(report_task,  "report",  4096, NULL, 4, &s_report_task_handle, 0);
     xTaskCreatePinnedToCore(haptic1_task, "haptic1", 4096, NULL, 5, NULL, 1);
     xTaskCreatePinnedToCore(haptic2_task, "haptic2", 4096, NULL, 5, NULL, 0);
-    xTaskCreatePinnedToCore(button_task,  "button",  2048, NULL, 3, NULL, 0);
+    xTaskCreatePinnedToCore(button_task,  "button",  4096, NULL, 3, NULL, 0);
 
     ESP_LOGI(TAG, "Dual-FOC haptic gamepad running.");
 }
