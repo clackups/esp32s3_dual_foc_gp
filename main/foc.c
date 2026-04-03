@@ -84,7 +84,9 @@ static esp_err_t set_field(const l298n_t *drv, uint32_t half,
     if (du < 0.0f) du = 0.0f;
     if (dv < 0.0f) dv = 0.0f;
     if (dw < 0.0f) dw = 0.0f;
-    return l298n_set_three_phase(drv, (uint32_t)du, (uint32_t)dv, (uint32_t)dw);
+    return l298n_set_three_phase(drv, (uint32_t)(du + 0.5f),
+                                     (uint32_t)(dv + 0.5f),
+                                     (uint32_t)(dw + 0.5f));
 }
 
 esp_err_t foc_calibrate(foc_motor_t *motor)
@@ -237,8 +239,9 @@ esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
     if (dw_f < 0.0f) dw_f = 0.0f;
 
     return l298n_set_three_phase(motor->driver,
-                                 (uint32_t)du_f, (uint32_t)dv_f,
-                                 (uint32_t)dw_f);
+                                 (uint32_t)(du_f + 0.5f),
+                                 (uint32_t)(dv_f + 0.5f),
+                                 (uint32_t)(dw_f + 0.5f));
 }
 
 esp_err_t foc_coast(foc_motor_t *motor)

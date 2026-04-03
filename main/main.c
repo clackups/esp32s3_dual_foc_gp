@@ -99,7 +99,7 @@ static void haptic1_task(void *arg)
             if (dev >  (float)M_PI) dev -= 2.0f * (float)M_PI;
             if (dev < -(float)M_PI) dev += 2.0f * (float)M_PI;
             int32_t v = (s_half_range1 > 1e-6f)
-                      ? (int32_t)(dev / s_half_range1 * 32767.0f)
+                      ? (int32_t)roundf(dev / s_half_range1 * 32767.0f)
                       : 0;
             if (v >  32767) v =  32767;
             if (v < -32767) v = -32767;
@@ -130,7 +130,7 @@ static void haptic2_task(void *arg)
             if (dev >  (float)M_PI) dev -= 2.0f * (float)M_PI;
             if (dev < -(float)M_PI) dev += 2.0f * (float)M_PI;
             int32_t v = (s_half_range2 > 1e-6f)
-                      ? (int32_t)(dev / s_half_range2 * 32767.0f)
+                      ? (int32_t)roundf(dev / s_half_range2 * 32767.0f)
                       : 0;
             if (v >  32767) v =  32767;
             if (v < -32767) v = -32767;
@@ -168,9 +168,9 @@ static void button_task(void *arg)
             s_continuous_mode = !s_continuous_mode;
             ESP_LOGI(TAG, "Mode toggled: %s",
                      s_continuous_mode ? "continuous" : "haptic");
-            /* Status LED: yellow = continuous, green = haptic. */
+            /* Status LED: blue = continuous, green = haptic. */
             if (s_continuous_mode) {
-                led_strip_set_pixel(s_status_led, 0, 32, 32, 0); /* yellow */
+                led_strip_set_pixel(s_status_led, 0, 0, 0, 32);  /* blue */
             } else {
                 led_strip_set_pixel(s_status_led, 0, 0, 32, 0);  /* green */
             }
