@@ -40,8 +40,9 @@ typedef struct {
  * @param freq_hz      PWM frequency (e.g. 20 000).
  * @param resolution   LEDC timer resolution (e.g. LEDC_TIMER_11_BIT).
  * @param standby_gpio GPIO connected to STANDBY pin, or -1 if not used.
- *                     When >= 0, the pin is driven HIGH on init (active)
- *                     and LOW on coast (low-power standby).
+ *                     When >= 0, the pin is driven HIGH on init (active).
+ *                     Use tmc6300_standby()/tmc6300_wake() to manage
+ *                     the low-power state explicitly.
  * @return ESP_OK on success.
  */
 esp_err_t tmc6300_init(tmc6300_t *drv, ledc_timer_t timer,
@@ -62,7 +63,21 @@ esp_err_t tmc6300_set_three_phase(const tmc6300_t *drv,
                                   uint32_t duty_w);
 
 /**
- * Coast (all outputs LOW).  If a STANDBY GPIO was provided at init,
- * the pin is driven LOW to put the TMC6300 into low-power standby.
+ * Coast (all PWM outputs to zero duty).  The driver remains active
+ * (STANDBY stays HIGH) so that subsequent set_three_phase() calls
+ * take effect immediately.
  */
 esp_err_t tmc6300_coast(const tmc6300_t *drv);
+
+/**
+ * Enter low-power standby mode.  All PWM outputs are zeroed and the
+ * STANDBY GPIO (if configured) is driven LOW.  Call tmc6300_wake()
+ * before resuming motor operation.
+ */
+esp_err_t tmc6300_standby(const tmc6300_t *drv);
+
+/**
+ * Wake the driver from standby by driving the STANDBY GPIO HIGH.
+ * Has no effect if no STANDBY GPIO was configured.
+ */
+esp_err_t tmc6300_wake(const tmc6300_t *drv);

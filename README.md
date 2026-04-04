@@ -25,12 +25,14 @@ changed there without modifying any other file.
 
 | Signal | GPIO | Description |
 |--------|------|-------------|
-| MOTOR1_UH   | 1  | Motor 1 phase U - TMC6300 UH (PWM) |
-| MOTOR1_VH   | 2  | Motor 1 phase V - TMC6300 VH (PWM) |
-| MOTOR1_WH   | 3  | Motor 1 phase W - TMC6300 WH (PWM) |
-| MOTOR2_UH   | 15 | Motor 2 phase U - TMC6300 UH (PWM) |
-| MOTOR2_VH   | 16 | Motor 2 phase V - TMC6300 VH (PWM) |
-| MOTOR2_WH   | 17 | Motor 2 phase W - TMC6300 WH (PWM) |
+| MOTOR1_UH      | 1  | Motor 1 phase U - TMC6300 UH (PWM)    |
+| MOTOR1_VH      | 2  | Motor 1 phase V - TMC6300 VH (PWM)    |
+| MOTOR1_WH      | 3  | Motor 1 phase W - TMC6300 WH (PWM)    |
+| MOTOR1_STANDBY | 13 | Motor 1 TMC6300 STANDBY (HIGH=active) |
+| MOTOR2_UH      | 15 | Motor 2 phase U - TMC6300 UH (PWM)    |
+| MOTOR2_VH      | 16 | Motor 2 phase V - TMC6300 VH (PWM)    |
+| MOTOR2_WH      | 17 | Motor 2 phase W - TMC6300 WH (PWM)    |
+| MOTOR2_STANDBY | 14 | Motor 2 TMC6300 STANDBY (HIGH=active) |
 | BUTTON0     | 4  | Game controller button 0 (active-low)  |
 | BUTTON1     | 5  | Game controller button 1 (active-low)  |
 | BUTTON2     | 6  | Game controller button 2 (active-low)  |
@@ -56,10 +58,18 @@ Each 2804 motor has three coil wires (U, V, W).  A single TMC6300
 drives the three motor phases via its half-bridge outputs:
 
 ```
-  UH (PWM) --> Phase U high-side gate
-  VH (PWM) --> Phase V high-side gate
-  WH (PWM) --> Phase W high-side gate
+  UH (PWM)  --> Phase U high-side gate
+  VH (PWM)  --> Phase V high-side gate
+  WH (PWM)  --> Phase W high-side gate
+  STANDBY   --> ESP32-S3 GPIO (driven HIGH to enable the driver)
+  VIO       --> +3.3 V (logic level reference)
 ```
+
+**Important:** The TMC6300 STANDBY pin has an internal pull-down.  If
+left unconnected, the chip stays in low-power standby and the motor
+will not move.  The firmware drives the STANDBY GPIO HIGH during
+`tmc6300_init()` and LOW on `tmc6300_coast()`.  Make sure the STANDBY
+pin on each TMC6300 board is wired to the corresponding ESP32-S3 GPIO.
 
 The firmware drives all three coils with sinusoidal PWM (120 deg apart)
 to create a rotating magnetic field.  This true three-phase drive

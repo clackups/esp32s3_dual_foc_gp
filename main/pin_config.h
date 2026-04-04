@@ -19,11 +19,13 @@
 #define MOTOR1_UH_GPIO      1   /* Phase U - PWM */
 #define MOTOR1_VH_GPIO      2   /* Phase V - PWM */
 #define MOTOR1_WH_GPIO      3   /* Phase W - PWM */
+#define MOTOR1_STANDBY_GPIO 13  /* STANDBY - HIGH = active, LOW = sleep */
 
 /* -- Motor 2 -- TMC6300 #2 ------------------------------------------- */
 #define MOTOR2_UH_GPIO      15  /* Phase U - PWM */
 #define MOTOR2_VH_GPIO      16  /* Phase V - PWM */
 #define MOTOR2_WH_GPIO      17  /* Phase W - PWM */
+#define MOTOR2_STANDBY_GPIO 14  /* STANDBY - HIGH = active, LOW = sleep */
 
 /* -- Game controller buttons (active-low, internal pull-up) ---------- */
 #define BUTTON_COUNT        10

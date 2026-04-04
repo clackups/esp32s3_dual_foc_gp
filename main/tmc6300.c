@@ -97,12 +97,23 @@ esp_err_t tmc6300_coast(const tmc6300_t *drv)
     if (err != ESP_OK) return err;
     err = set_duty(drv->ch_v, 0);
     if (err != ESP_OK) return err;
-    err = set_duty(drv->ch_w, 0);
-    if (err != ESP_OK) return err;
+    return set_duty(drv->ch_w, 0);
+}
 
-    /* Enter low-power standby if the STANDBY pin is managed. */
+esp_err_t tmc6300_standby(const tmc6300_t *drv)
+{
+    esp_err_t err = tmc6300_coast(drv);
+    if (err != ESP_OK) return err;
     if (drv->standby_gpio >= 0) {
         return gpio_set_level(drv->standby_gpio, 0);
+    }
+    return ESP_OK;
+}
+
+esp_err_t tmc6300_wake(const tmc6300_t *drv)
+{
+    if (drv->standby_gpio >= 0) {
+        return gpio_set_level(drv->standby_gpio, 1);
     }
     return ESP_OK;
 }
