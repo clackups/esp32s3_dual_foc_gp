@@ -3,7 +3,6 @@
  */
 
 #include "tmc6300.h"
-#include "driver/gpio.h"
 
 static esp_err_t init_pwm_channel(ledc_channel_t ch, ledc_timer_t timer,
                                   int gpio)
@@ -22,7 +21,6 @@ static esp_err_t init_pwm_channel(ledc_channel_t ch, ledc_timer_t timer,
 
 esp_err_t tmc6300_init(tmc6300_t *drv, ledc_timer_t timer,
                        int uh_gpio, int vh_gpio, int wh_gpio,
-                       int ul_gpio, int vl_gpio, int wl_gpio,
                        ledc_channel_t ch_base,
                        uint32_t freq_hz, ledc_timer_bit_t resolution)
 {
@@ -42,25 +40,8 @@ esp_err_t tmc6300_init(tmc6300_t *drv, ledc_timer_t timer,
     drv->ch_w     = ch_base + 2;
     drv->max_duty = (1U << resolution) - 1;
 
-    /* Drive UL/VL/WL HIGH so the low-side FETs are always on.
-     * This enables 3-PWM mode: high-side PWM + low-side always
-     * conducting, completing the current path through each phase. */
-    {
-        const int low_gpios[] = { ul_gpio, vl_gpio, wl_gpio };
-        for (int i = 0; i < 3; i++) {
-            const gpio_config_t lo_cfg = {
-                .pin_bit_mask = 1ULL << low_gpios[i],
-                .mode         = GPIO_MODE_OUTPUT,
-                .pull_up_en   = GPIO_PULLUP_DISABLE,
-                .pull_down_en = GPIO_PULLDOWN_DISABLE,
-                .intr_type    = GPIO_INTR_DISABLE,
-            };
-            err = gpio_config(&lo_cfg);
-            if (err != ESP_OK) return err;
-            err = gpio_set_level(low_gpios[i], 1);
-            if (err != ESP_OK) return err;
-        }
-    }
+    /* UL/VL/WL and VIO are hardwired to +3.3 V on the PCB, so no GPIO
+     * setup is needed for low-side enables or standby control. */
 
     /* PWM on UH, VH, WH (three motor phases). */
     err = init_pwm_channel(drv->ch_u, timer, uh_gpio);

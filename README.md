@@ -25,17 +25,11 @@ changed there without modifying any other file.
 
 | Signal | GPIO | Description |
 |--------|------|-------------|
-| MOTOR1_UL      | 1  | Motor 1 phase U - TMC6300 UL (HIGH)   |
 | MOTOR1_UH      | 2  | Motor 1 phase U - TMC6300 UH (PWM)    |
-| MOTOR1_VL      | 3  | Motor 1 phase V - TMC6300 VL (HIGH)   |
 | MOTOR1_VH      | 39 | Motor 1 phase V - TMC6300 VH (PWM)    |
-| MOTOR1_WL      | 40 | Motor 1 phase W - TMC6300 WL (HIGH)   |
 | MOTOR1_WH      | 41 | Motor 1 phase W - TMC6300 WH (PWM)    |
-| MOTOR2_UL      | 13 | Motor 2 phase U - TMC6300 UL (HIGH)   |
 | MOTOR2_UH      | 14 | Motor 2 phase U - TMC6300 UH (PWM)    |
-| MOTOR2_VL      | 15 | Motor 2 phase V - TMC6300 VL (HIGH)   |
 | MOTOR2_VH      | 16 | Motor 2 phase V - TMC6300 VH (PWM)    |
-| MOTOR2_WL      | 17 | Motor 2 phase W - TMC6300 WL (HIGH)   |
 | MOTOR2_WH      | 42 | Motor 2 phase W - TMC6300 WH (PWM)    |
 | BUTTON0     | 4  | Game controller button 0 (active-low)  |
 | BUTTON1     | 5  | Game controller button 1 (active-low)  |
@@ -65,23 +59,13 @@ drives the three motor phases via its half-bridge outputs:
   UH (PWM)  --> Phase U high-side gate   (ESP32-S3 PWM output)
   VH (PWM)  --> Phase V high-side gate   (ESP32-S3 PWM output)
   WH (PWM)  --> Phase W high-side gate   (ESP32-S3 PWM output)
-  UL (HIGH) --> Phase U low-side gate    (ESP32-S3 GPIO, driven HIGH)
-  VL (HIGH) --> Phase V low-side gate    (ESP32-S3 GPIO, driven HIGH)
-  WL (HIGH) --> Phase W low-side gate    (ESP32-S3 GPIO, driven HIGH)
-  VIO       --> +3.3 V (logic level reference, always active)
+  UL, VL, WL -> +3.3 V (low-side FETs always on, 3-PWM mode)
+  VIO        -> +3.3 V (logic level reference, always active)
 ```
 
-**Important -- low-side enables (UL/VL/WL):** The TMC6300 has three
-high-side inputs (UH/VH/WH) and three low-side inputs (UL/VL/WL).
-In 3-PWM mode the high-side inputs receive sinusoidal PWM while the
-low-side inputs must be held HIGH so the complementary low-side FETs
-conduct whenever the high-side FET is off, completing the current path
-through each motor phase.  If UL/VL/WL are left floating or LOW, no
-current flows and the motor will not move.  The firmware drives them
-HIGH during `tmc6300_init()`.
-
-The TMC6300 VIO pin is tied permanently to +3.3 V so the driver is
-always active (no software standby control is needed).
+**Low-side enables (UL/VL/WL) and VIO** are wired directly to +3.3 V
+on the PCB.  This keeps the low-side FETs permanently on (3-PWM mode)
+and the driver always active, without consuming any ESP32-S3 GPIO pins.
 
 The firmware drives all three coils with sinusoidal PWM (120 deg apart)
 to create a rotating magnetic field.  This true three-phase drive
