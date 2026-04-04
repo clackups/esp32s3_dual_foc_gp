@@ -293,16 +293,14 @@ void app_main(void)
     }
 
     ESP_LOGI(TAG, "Initialising motor drivers ...");
-    ESP_ERROR_CHECK(l298n_init(&s_drv1, LEDC_TIMER_0,
+    ESP_ERROR_CHECK(l298n_init(&s_drv1, 0,
                                MOTOR1_IN1_GPIO, MOTOR1_IN2_GPIO,
                                MOTOR1_IN3_GPIO,
-                               LEDC_CHANNEL_0,
-                               MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
-    ESP_ERROR_CHECK(l298n_init(&s_drv2, LEDC_TIMER_1,
+                               MOTOR_PWM_FREQ_HZ));
+    ESP_ERROR_CHECK(l298n_init(&s_drv2, 1,
                                MOTOR2_IN1_GPIO, MOTOR2_IN2_GPIO,
                                MOTOR2_IN3_GPIO,
-                               LEDC_CHANNEL_3,
-                               MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
+                               MOTOR_PWM_FREQ_HZ));
 
     ESP_LOGI(TAG, "Calibrating FOC ...");
     foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS, s_motor1_angle_offset);

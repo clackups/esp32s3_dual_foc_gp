@@ -1,58 +1,104 @@
 /*
- * l298n.c -- Mini L298N motor driver (3-phase sinusoidal PWM).
+ * l298n.c -- Mini L298N motor driver (3-phase sinusoidal PWM via MCPWM).
  */
 
 #include "l298n.h"
 
-static esp_err_t init_pwm_channel(ledc_channel_t ch, ledc_timer_t timer,
-                                  int gpio)
+/* MCPWM timer resolution -- 80 MHz gives sub-microsecond duty steps. */
+#define MCPWM_RESOLUTION_HZ  80000000
+
+/*
+ * Create one MCPWM operator + comparator + generator for a single
+ * motor phase, and configure center-aligned PWM actions.
+ */
+static esp_err_t init_phase(int group_id, mcpwm_timer_handle_t timer,
+                            int gpio, mcpwm_cmpr_handle_t *out_cmp)
 {
-    const ledc_channel_config_t cfg = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel    = ch,
-        .timer_sel  = timer,
-        .intr_type  = LEDC_INTR_DISABLE,
-        .gpio_num   = gpio,
-        .duty       = 0,
-        .hpoint     = 0,
+    /* Operator -------------------------------------------------------- */
+    const mcpwm_operator_config_t oper_cfg = {
+        .group_id = group_id,
     };
-    return ledc_channel_config(&cfg);
+    mcpwm_oper_handle_t oper;
+    esp_err_t err = mcpwm_new_operator(&oper_cfg, &oper);
+    if (err != ESP_OK) return err;
+
+    err = mcpwm_operator_connect_timer(oper, timer);
+    if (err != ESP_OK) return err;
+
+    /* Comparator ------------------------------------------------------ */
+    const mcpwm_comparator_config_t cmp_cfg = {
+        .flags.update_cmp_on_tez = true,   /* sync all phases at trough */
+    };
+    mcpwm_cmpr_handle_t cmp;
+    err = mcpwm_new_comparator(oper, &cmp_cfg, &cmp);
+    if (err != ESP_OK) return err;
+
+    err = mcpwm_comparator_set_compare_value(cmp, 0);
+    if (err != ESP_OK) return err;
+
+    /* Generator ------------------------------------------------------- */
+    const mcpwm_generator_config_t gen_cfg = {
+        .gen_gpio_num = gpio,
+    };
+    mcpwm_gen_handle_t gen;
+    err = mcpwm_new_generator(oper, &gen_cfg, &gen);
+    if (err != ESP_OK) return err;
+
+    /* Center-aligned PWM actions:
+     *   count == 0 (trough): set HIGH
+     *   count up == compare:  set LOW
+     *   count down == compare: set HIGH                                */
+    err = mcpwm_generator_set_action_on_timer_event(gen,
+        MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP,
+                                     MCPWM_TIMER_EVENT_EMPTY,
+                                     MCPWM_GEN_ACTION_HIGH));
+    if (err != ESP_OK) return err;
+
+    err = mcpwm_generator_set_action_on_compare_event(gen,
+        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP,
+                                       cmp, MCPWM_GEN_ACTION_LOW));
+    if (err != ESP_OK) return err;
+
+    err = mcpwm_generator_set_action_on_compare_event(gen,
+        MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_DOWN,
+                                       cmp, MCPWM_GEN_ACTION_HIGH));
+    if (err != ESP_OK) return err;
+
+    *out_cmp = cmp;
+    return ESP_OK;
 }
 
-esp_err_t l298n_init(l298n_t *drv, ledc_timer_t timer,
+esp_err_t l298n_init(l298n_t *drv, int group_id,
                      int in1_gpio, int in2_gpio, int in3_gpio,
-                     ledc_channel_t ch_base,
-                     uint32_t freq_hz, ledc_timer_bit_t resolution)
+                     uint32_t freq_hz)
 {
-    /* Configure the LEDC timer for this Mini L298N instance. */
-    const ledc_timer_config_t timer_cfg = {
-        .speed_mode      = LEDC_LOW_SPEED_MODE,
-        .timer_num       = timer,
-        .duty_resolution = resolution,
-        .freq_hz         = freq_hz,
-        .clk_cfg         = LEDC_AUTO_CLK,
+    /* Timer (center-aligned, UP_DOWN counting) ----------------------- */
+    uint32_t period_ticks = MCPWM_RESOLUTION_HZ / freq_hz;
+    const mcpwm_timer_config_t timer_cfg = {
+        .group_id      = group_id,
+        .clk_src       = MCPWM_TIMER_CLK_SRC_DEFAULT,
+        .resolution_hz = MCPWM_RESOLUTION_HZ,
+        .count_mode    = MCPWM_TIMER_COUNT_MODE_UP_DOWN,
+        .period_ticks  = period_ticks,
     };
-    esp_err_t err = ledc_timer_config(&timer_cfg);
+    mcpwm_timer_handle_t timer;
+    esp_err_t err = mcpwm_new_timer(&timer_cfg, &timer);
     if (err != ESP_OK) return err;
 
-    drv->ch_in1   = ch_base;
-    drv->ch_in2   = ch_base + 1;
-    drv->ch_in3   = ch_base + 2;
-    drv->max_duty = (1U << resolution) - 1;
+    drv->max_duty = period_ticks / 2;  /* peak ticks */
 
-    /* PWM on IN1-IN3 (three motor phases). */
-    err = init_pwm_channel(drv->ch_in1, timer, in1_gpio);
+    /* Three phases ---------------------------------------------------- */
+    err = init_phase(group_id, timer, in1_gpio, &drv->cmp_u);
     if (err != ESP_OK) return err;
-    err = init_pwm_channel(drv->ch_in2, timer, in2_gpio);
+    err = init_phase(group_id, timer, in2_gpio, &drv->cmp_v);
     if (err != ESP_OK) return err;
-    return init_pwm_channel(drv->ch_in3, timer, in3_gpio);
-}
+    err = init_phase(group_id, timer, in3_gpio, &drv->cmp_w);
+    if (err != ESP_OK) return err;
 
-static esp_err_t set_duty(ledc_channel_t ch, uint32_t duty)
-{
-    esp_err_t err = ledc_set_duty(LEDC_LOW_SPEED_MODE, ch, duty);
+    /* Enable and start the timer ------------------------------------- */
+    err = mcpwm_timer_enable(timer);
     if (err != ESP_OK) return err;
-    return ledc_update_duty(LEDC_LOW_SPEED_MODE, ch);
+    return mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP);
 }
 
 esp_err_t l298n_set_three_phase(const l298n_t *drv,
@@ -64,19 +110,19 @@ esp_err_t l298n_set_three_phase(const l298n_t *drv,
     if (duty_w > drv->max_duty) duty_w = drv->max_duty;
 
     esp_err_t err;
-    err = set_duty(drv->ch_in1, duty_u);
+    err = mcpwm_comparator_set_compare_value(drv->cmp_u, duty_u);
     if (err != ESP_OK) return err;
-    err = set_duty(drv->ch_in2, duty_v);
+    err = mcpwm_comparator_set_compare_value(drv->cmp_v, duty_v);
     if (err != ESP_OK) return err;
-    return set_duty(drv->ch_in3, duty_w);
+    return mcpwm_comparator_set_compare_value(drv->cmp_w, duty_w);
 }
 
 esp_err_t l298n_coast(const l298n_t *drv)
 {
     esp_err_t err;
-    err = set_duty(drv->ch_in1, 0);
+    err = mcpwm_comparator_set_compare_value(drv->cmp_u, 0);
     if (err != ESP_OK) return err;
-    err = set_duty(drv->ch_in2, 0);
+    err = mcpwm_comparator_set_compare_value(drv->cmp_v, 0);
     if (err != ESP_OK) return err;
-    return set_duty(drv->ch_in3, 0);
+    return mcpwm_comparator_set_compare_value(drv->cmp_w, 0);
 }

@@ -2,8 +2,8 @@
  * foc.c -- Three-phase field-oriented control for 2804 BLDC motors
  *         (3 coil inputs, 7 pole pairs).
  *
- * The Mini L298N drives all three coils (U, V, W) with sinusoidal
- * PWM 120 deg apart:
+ * The Mini L298N drives all three coils (U, V, W) with center-aligned
+ * sinusoidal PWM (via MCPWM) 120 deg apart:
  *
  *   duty_u = half + half * amplitude * sin(theta_e + 90 deg)
  *   duty_v = half + half * amplitude * sin(theta_e + 90 deg - 120 deg)
@@ -30,22 +30,11 @@
  * alignment torque = 0.95 * sin(60 deg) ~= 0.82 -- well above any
  * cogging-torque peak.
  *
- * The calibration sweeps the FULL mechanical revolution (6 steps *
- * pole_pairs = 42 steps for a 7-PP motor) instead of a single
- * electrical cycle.  Each measurement position is reached via a
- * two-phase approach:
- *   (a) Closed-loop drive: foc_set_torque() pushes the rotor
- *       toward the target mechanical angle.  This overcomes motor
- *       cogging reliably at every position, including electrical
- *       cycle boundaries where the open-loop field wraps.
- *   (b) Open-loop alignment: set_field() at the known electrical
- *       angle precisely positions the rotor for the measurement.
- *
- * The measured corrections are interpolated directly into the
- * 128-bin cal_table by mechanical angle, capturing both motor
+ * The calibration sweeps 90 degrees of mechanical travel (one-way)
+ * and averages the per-electrical-cycle corrections, then tiles
+ * them across the full 128-bin table.  This captures motor
  * construction imperfections (periodic with the electrical cycle)
- * and the slow-varying AS5600 encoder nonlinearity (periodic with
- * the full rotation).                                                 */
+ * while keeping calibration time short (~4 s for 7 pole pairs).  */
 #define CAL_ELEC_STEPS    6
 
 /* Milliseconds to let the rotor settle at each open-loop alignment.
@@ -59,16 +48,16 @@
 #define CAL_MAX_POLE_PAIRS 14
 
 /* Maximum duration of the closed-loop drive phase per step (ms).
- * Must be long enough for the L298N (with its ~2 V bipolar drop)
- * to push the rotor past the halfway point between open-loop
- * alignment equilibria at every electrical-cycle boundary.  The
- * loop exits early once the position error is small enough.          */
+ * Must be long enough for the L298N to push the rotor past the
+ * halfway point between open-loop alignment equilibria at every
+ * electrical-cycle boundary.  The loop exits early once the
+ * position error is small enough.                                   */
 #define CAL_DRIVE_MS      150
 
 /* P-control gain and peak torque for the closed-loop drive.
  * torque = clamp(error_rad * CAL_DRIVE_GAIN, +/-CAL_DRIVE_MAX_TQ).
  * Using full torque (0.95) ensures the L298N can overcome cogging
- * peaks even with its reduced output voltage.                        */
+ * peaks even with its reduced output voltage.                       */
 #define CAL_DRIVE_GAIN    5.0f
 #define CAL_DRIVE_MAX_TQ  0.95f
 
@@ -150,7 +139,8 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     motor->zero_electrical_angle = fmodf(angle * pp, two_pi);
 
     /*
-     * Phase 2 -- Full-revolution sweep with closed-loop positioning.
+     * Phase 2 -- Quarter-revolution forward sweep with closed-loop
+     *            positioning.
      *
      * Each measurement position is reached via:
      *   (a) Closed-loop P-control drive using foc_set_torque()
@@ -160,14 +150,13 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
      *   (b) Open-loop alignment at the known electrical angle for
      *       precise positioning and measurement.
      *
-     * Two sweeps -- forward then backward -- are averaged so that
-     * any directional bias from motor inertia cancels out.
-     *
-     * The corrections are interpolated directly into the 128-bin
-     * cal_table by mechanical angle (no tiling), capturing both
-     * electrical-periodic errors and encoder nonlinearity.
+     * Only 90 degrees of mechanical travel are swept (one direction).
+     * The corrections within each electrical cycle position are
+     * averaged and tiled across the full 128-bin table.
      */
     int total_steps = CAL_ELEC_STEPS * (int)motor->pole_pairs;
+    int quarter_steps = total_steps / 4;
+    if (quarter_steps < CAL_ELEC_STEPS) quarter_steps = CAL_ELEC_STEPS;
     /* Correction at each measurement position.  Maximum
      * CAL_ELEC_STEPS * CAL_MAX_POLE_PAIRS entries.                */
     float mech_corr[CAL_ELEC_STEPS * CAL_MAX_POLE_PAIRS];
@@ -185,8 +174,8 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
     }
     float step_mech = two_pi / (float)total_steps;
 
-    /* -- Forward sweep (full revolution) ------------------------ */
-    for (int i = 0; i < total_steps; i++) {
+    /* -- Forward sweep (90 degrees) ----------------------------- */
+    for (int i = 0; i < quarter_steps; i++) {
         /* (a) Closed-loop drive toward target mechanical angle. */
         float target = start_angle + step_mech * (float)i;
         for (int t = 0; t < CAL_DRIVE_MS; t++) {
@@ -240,57 +229,32 @@ esp_err_t foc_calibrate(foc_motor_t *motor)
         mech_corr[i] = corr;
     }
 
-    /* -- Backward sweep -- average with the forward pass -------- */
-    for (int i = total_steps - 1; i >= 0; i--) {
-        float target = start_angle + step_mech * (float)i;
-        for (int t = 0; t < CAL_DRIVE_MS; t++) {
-            float cur;
-            err = read_corrected_angle(motor, &cur);
-            if (err != ESP_OK) {
-                memset(motor->cal_table, 0, sizeof(motor->cal_table));
-                l298n_coast(motor->driver);
-                return err;
-            }
-            float e = target - cur;
-            if (e >  (float)M_PI) e -= two_pi;
-            if (e < -(float)M_PI) e += two_pi;
-            /* Exit early once close enough to avoid overshooting. */
-            float abs_e = (e >= 0.0f) ? e : -e;
-            if (abs_e < CAL_DRIVE_CONVERGE_RAD) break;
-            float tq = e * CAL_DRIVE_GAIN;
-            if (tq >  CAL_DRIVE_MAX_TQ) tq =  CAL_DRIVE_MAX_TQ;
-            if (tq < -CAL_DRIVE_MAX_TQ) tq = -CAL_DRIVE_MAX_TQ;
-            err = foc_set_torque(motor, tq);
-            if (err != ESP_OK) {
-                memset(motor->cal_table, 0, sizeof(motor->cal_table));
-                l298n_coast(motor->driver);
-                return err;
-            }
-            vTaskDelay(pdMS_TO_TICKS(1));
+    /* -- Average per-electrical-cycle-phase corrections ----------
+     *
+     * The quarter-revolution sweep covers multiple electrical
+     * cycles.  Average the measured corrections at the same phase
+     * within the electrical cycle, then tile them to fill
+     * mech_corr for all total_steps positions so the 128-bin
+     * interpolation below works unchanged.                        */
+    {
+        float phase_sum[CAL_ELEC_STEPS];
+        int   phase_cnt[CAL_ELEC_STEPS];
+        for (int p = 0; p < CAL_ELEC_STEPS; p++) {
+            phase_sum[p] = 0.0f;
+            phase_cnt[p] = 0;
         }
-
-        float theta_e = two_pi * (float)i / (float)CAL_ELEC_STEPS;
-        err = set_field(motor->driver, half, cal_amplitude, theta_e);
-        if (err != ESP_OK) {
-            memset(motor->cal_table, 0, sizeof(motor->cal_table));
-            l298n_coast(motor->driver);
-            return err;
+        for (int i = 0; i < quarter_steps; i++) {
+            int p = i % CAL_ELEC_STEPS;
+            phase_sum[p] += mech_corr[i];
+            phase_cnt[p]++;
         }
-        vTaskDelay(pdMS_TO_TICKS(CAL_SETTLE_MS));
-
-        float mech;
-        err = read_corrected_angle(motor, &mech);
-        if (err != ESP_OK) {
-            memset(motor->cal_table, 0, sizeof(motor->cal_table));
-            l298n_coast(motor->driver);
-            return err;
+        for (int p = 0; p < CAL_ELEC_STEPS; p++) {
+            if (phase_cnt[p] > 0)
+                phase_sum[p] /= (float)phase_cnt[p];
         }
-
-        float naive  = fmodf(mech * pp, two_pi) - motor->zero_electrical_angle;
-        float corr   = fmodf(theta_e - naive, two_pi);
-        if (corr >  (float)M_PI) corr -= two_pi;
-        if (corr < -(float)M_PI) corr += two_pi;
-        mech_corr[i] = (mech_corr[i] + corr) * 0.5f;
+        for (int i = 0; i < total_steps; i++) {
+            mech_corr[i] = phase_sum[i % CAL_ELEC_STEPS];
+        }
     }
 
     /* -- Interpolate into 128-bin table by mechanical angle ------
