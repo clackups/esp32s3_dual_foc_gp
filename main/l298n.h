@@ -1,5 +1,5 @@
 /*
- * l298n.h -- Mini L298N motor driver (3-phase sinusoidal PWM).
+ * l298n.h -- Mini L298N motor driver (3-phase sinusoidal PWM via MCPWM).
  *
  * The Mini L298N board exposes only IN1-IN4 (no ENA/ENB).  Each INx
  * pin directly drives the corresponding OUTx via PWM.  Three of the
@@ -12,34 +12,30 @@
 
 #pragma once
 
-#include "driver/ledc.h"
+#include "driver/mcpwm_prelude.h"
 #include "esp_err.h"
 
 typedef struct {
-    ledc_channel_t ch_in1;   /* IN1 LEDC channel - phase U */
-    ledc_channel_t ch_in2;   /* IN2 LEDC channel - phase V */
-    ledc_channel_t ch_in3;   /* IN3 LEDC channel - phase W */
-    uint32_t       max_duty; /* Maximum PWM duty (2^resolution - 1) */
+    mcpwm_cmpr_handle_t cmp_u;     /* Phase U comparator */
+    mcpwm_cmpr_handle_t cmp_v;     /* Phase V comparator */
+    mcpwm_cmpr_handle_t cmp_w;     /* Phase W comparator */
+    uint32_t            max_duty;  /* Maximum compare value (peak ticks) */
 } l298n_t;
 
 /**
- * Initialise one Mini L298N (three LEDC PWM channels).
+ * Initialise one Mini L298N (three MCPWM channels, center-aligned).
  *
  * @param drv          Pointer to an uninitialised l298n_t.
- * @param timer        LEDC timer to use (LEDC_TIMER_0 ... 3).
+ * @param group_id     MCPWM group (0 or 1).
  * @param in1_gpio     IN1 GPIO (PWM -> coil U).
  * @param in2_gpio     IN2 GPIO (PWM -> coil V).
  * @param in3_gpio     IN3 GPIO (PWM -> coil W).
- * @param ch_base      First LEDC channel to use; three consecutive
- *                     channels starting from ch_base will be consumed.
  * @param freq_hz      PWM frequency (e.g. 20 000).
- * @param resolution   LEDC timer resolution (e.g. LEDC_TIMER_10_BIT).
  * @return ESP_OK on success.
  */
-esp_err_t l298n_init(l298n_t *drv, ledc_timer_t timer,
+esp_err_t l298n_init(l298n_t *drv, int group_id,
                      int in1_gpio, int in2_gpio, int in3_gpio,
-                     ledc_channel_t ch_base,
-                     uint32_t freq_hz, ledc_timer_bit_t resolution);
+                     uint32_t freq_hz);
 
 /**
  * Set unsigned PWM duty for each of the three motor phases.

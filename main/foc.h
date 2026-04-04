@@ -1,6 +1,6 @@
 /*
  * foc.h -- Three-phase field-oriented control for BLDC motors
- *         driven through Mini L298N boards (PWM on IN1-IN3).
+ *         driven through Mini L298N boards (MCPWM on IN1-IN3).
  */
 
 #pragma once

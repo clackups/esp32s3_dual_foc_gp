@@ -2,8 +2,8 @@
  * foc.c -- Three-phase field-oriented control for 2804 BLDC motors
  *         (3 coil inputs, 7 pole pairs).
  *
- * The Mini L298N drives all three coils (U, V, W) with sinusoidal
- * PWM 120 deg apart:
+ * The Mini L298N drives all three coils (U, V, W) with center-aligned
+ * sinusoidal PWM (via MCPWM) 120 deg apart:
  *
  *   duty_u = half + half * amplitude * sin(theta_e + 90 deg)
  *   duty_v = half + half * amplitude * sin(theta_e + 90 deg - 120 deg)
@@ -59,16 +59,16 @@
 #define CAL_MAX_POLE_PAIRS 14
 
 /* Maximum duration of the closed-loop drive phase per step (ms).
- * Must be long enough for the L298N (with its ~2 V bipolar drop)
- * to push the rotor past the halfway point between open-loop
- * alignment equilibria at every electrical-cycle boundary.  The
- * loop exits early once the position error is small enough.          */
+ * Must be long enough for the L298N to push the rotor past the
+ * halfway point between open-loop alignment equilibria at every
+ * electrical-cycle boundary.  The loop exits early once the
+ * position error is small enough.                                   */
 #define CAL_DRIVE_MS      150
 
 /* P-control gain and peak torque for the closed-loop drive.
  * torque = clamp(error_rad * CAL_DRIVE_GAIN, +/-CAL_DRIVE_MAX_TQ).
  * Using full torque (0.95) ensures the L298N can overcome cogging
- * peaks even with its reduced output voltage.                        */
+ * peaks even with its reduced output voltage.                       */
 #define CAL_DRIVE_GAIN    5.0f
 #define CAL_DRIVE_MAX_TQ  0.95f
 
