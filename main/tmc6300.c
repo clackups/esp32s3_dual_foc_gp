@@ -53,7 +53,7 @@ static esp_err_t init_phase(int group_id, mcpwm_timer_handle_t timer,
      *   - Output goes LOW  when the timer counts UP past the compare
      *   - Output goes HIGH when the timer counts DOWN past the compare
      *
-     * This produces a symmetric pulse centred on the timer trough
+     * This produces a symmetric pulse centered on the timer trough
      * (count = 0).  Duty = compare_value / period_ticks.
      *
      *   compare = 0            ->   0 % duty (always LOW)

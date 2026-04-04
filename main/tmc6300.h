@@ -27,13 +27,14 @@
 
 #pragma once
 
+#include "driver/mcpwm_cmpr.h"
 #include "esp_err.h"
 #include <stdint.h>
 
 typedef struct {
-    void    *cmpr_u;    /* MCPWM comparator handle -- phase U (opaque) */
-    void    *cmpr_v;    /* MCPWM comparator handle -- phase V (opaque) */
-    void    *cmpr_w;    /* MCPWM comparator handle -- phase W (opaque) */
+    mcpwm_cmpr_handle_t cmpr_u;    /* MCPWM comparator -- phase U */
+    mcpwm_cmpr_handle_t cmpr_v;    /* MCPWM comparator -- phase V */
+    mcpwm_cmpr_handle_t cmpr_w;    /* MCPWM comparator -- phase W */
     uint32_t max_duty;  /* Timer period ticks (comparator range 0..max_duty) */
 } tmc6300_t;
 
