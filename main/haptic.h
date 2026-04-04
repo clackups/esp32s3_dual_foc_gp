@@ -16,7 +16,7 @@
 #define HAPTIC_DEFAULT_STEPS 21
 
 /** Maximum normalised torque applied for the detent effect (0 - 1). */
-#define HAPTIC_DEFAULT_STRENGTH 0.80f
+#define HAPTIC_DEFAULT_STRENGTH 0.85f
 
 /** Default dead-zone expressed as a fraction of one step angle.
  *  Within this zone around a detent centre the rotor is treated as
@@ -36,7 +36,7 @@
 #define HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE 0.80f
 
 /** Peak normalised torque at the maximum angle (0 - 1). */
-#define HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE 0.80f
+#define HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE 0.90f
 
 typedef struct {
     foc_motor_t *motor;
