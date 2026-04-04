@@ -59,6 +59,5 @@
 /* -- Status LED (WS2812 on GPIO 48) ---------------------------------- */
 #define STATUS_LED_GPIO     48
 
-/* -- LEDC PWM settings (shared by all motor channels) ---------------- */
+/* -- Motor PWM settings ---------------------------------------------- */
 #define MOTOR_PWM_FREQ_HZ   20000
-#define MOTOR_PWM_RESOLUTION LEDC_TIMER_11_BIT  /* 0-2048 duty range */
