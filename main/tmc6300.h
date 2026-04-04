@@ -64,7 +64,11 @@ esp_err_t tmc6300_set_three_phase(const tmc6300_t *drv,
                                   uint32_t duty_w);
 
 /**
- * Coast (all PWM outputs to zero duty).  The driver remains active
- * so that subsequent set_three_phase() calls take effect immediately.
+ * Coast (all PWM outputs to 50 % duty -- neutral, zero torque).
+ *
+ * With UL/VL/WL hardwired to +3.3 V, setting duty to 0 would turn on
+ * all low-side FETs (braking) and may trigger the TMC6300's overcurrent
+ * protection.  50 % keeps each phase at Vmotor / 2 on average so no
+ * inter-phase current flows.
  */
 esp_err_t tmc6300_coast(const tmc6300_t *drv);

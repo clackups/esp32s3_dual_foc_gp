@@ -5,7 +5,7 @@
 #include "tmc6300.h"
 
 static esp_err_t init_pwm_channel(ledc_channel_t ch, ledc_timer_t timer,
-                                  int gpio)
+                                  int gpio, uint32_t duty)
 {
     const ledc_channel_config_t cfg = {
         .speed_mode = LEDC_LOW_SPEED_MODE,
@@ -13,7 +13,7 @@ static esp_err_t init_pwm_channel(ledc_channel_t ch, ledc_timer_t timer,
         .timer_sel  = timer,
         .intr_type  = LEDC_INTR_DISABLE,
         .gpio_num   = gpio,
-        .duty       = 0,
+        .duty       = duty,
         .hpoint     = 0,
     };
     return ledc_channel_config(&cfg);
@@ -41,14 +41,22 @@ esp_err_t tmc6300_init(tmc6300_t *drv, ledc_timer_t timer,
     drv->max_duty = (1U << resolution) - 1;
 
     /* UL/VL/WL and VIO are hardwired to +3.3 V on the PCB, so no GPIO
-     * setup is needed for low-side enables or standby control. */
+     * setup is needed for low-side enables or standby control.
+     *
+     * Start every channel at 50 % duty (the neutral, zero-torque
+     * point).  With the low-side FETs always enabled, duty = 0 would
+     * short all three phases to GND simultaneously, which can trigger
+     * the TMC6300's overcurrent/fault protection and latch the driver
+     * into a disabled state.  50 % keeps each phase at Vmotor / 2 on
+     * average, so no current flows and no fault is triggered.          */
+    uint32_t half = drv->max_duty / 2;
 
     /* PWM on UH, VH, WH (three motor phases). */
-    err = init_pwm_channel(drv->ch_u, timer, uh_gpio);
+    err = init_pwm_channel(drv->ch_u, timer, uh_gpio, half);
     if (err != ESP_OK) return err;
-    err = init_pwm_channel(drv->ch_v, timer, vh_gpio);
+    err = init_pwm_channel(drv->ch_v, timer, vh_gpio, half);
     if (err != ESP_OK) return err;
-    return init_pwm_channel(drv->ch_w, timer, wh_gpio);
+    return init_pwm_channel(drv->ch_w, timer, wh_gpio, half);
 }
 
 static esp_err_t set_duty(ledc_channel_t ch, uint32_t duty)
@@ -76,10 +84,16 @@ esp_err_t tmc6300_set_three_phase(const tmc6300_t *drv,
 
 esp_err_t tmc6300_coast(const tmc6300_t *drv)
 {
+    /* Set all phases to 50 % duty (Vmotor / 2 average on each phase).
+     * With UL/VL/WL hardwired HIGH, duty = 0 would turn on all
+     * low-side FETs (braking) and risk triggering overcurrent
+     * protection.  50 % keeps the phases at the same average voltage
+     * so no current flows and no fault is triggered.                  */
+    uint32_t half = drv->max_duty / 2;
     esp_err_t err;
-    err = set_duty(drv->ch_u, 0);
+    err = set_duty(drv->ch_u, half);
     if (err != ESP_OK) return err;
-    err = set_duty(drv->ch_v, 0);
+    err = set_duty(drv->ch_v, half);
     if (err != ESP_OK) return err;
-    return set_duty(drv->ch_w, 0);
+    return set_duty(drv->ch_w, half);
 }
