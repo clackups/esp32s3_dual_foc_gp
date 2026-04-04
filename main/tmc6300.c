@@ -17,10 +17,19 @@
 /* Helper: create one operator + comparator + generator for a single  */
 /* motor phase, connect it to the shared timer, and configure         */
 /* center-aligned PWM actions.                                        */
+/*                                                                    */
+/* The generator output is forced HIGH during setup so that the       */
+/* TMC6300's high-side FET stays on (phase at Vmotor) until the PWM   */
+/* waveform takes over.  Without this, the default-LOW output would   */
+/* turn on the always-enabled low-side FET, shorting the phase to GND */
+/* and potentially triggering the TMC6300's fault protection.         */
+/* The caller must release the force level after the timer starts     */
+/* (see tmc6300_init).                                                */
 /* ------------------------------------------------------------------ */
 static esp_err_t init_phase(int group_id, mcpwm_timer_handle_t timer,
                             int gpio, uint32_t init_cmp,
-                            mcpwm_cmpr_handle_t *out_cmpr)
+                            mcpwm_cmpr_handle_t *out_cmpr,
+                            mcpwm_gen_handle_t *out_gen)
 {
     /* Operator */
     mcpwm_operator_config_t oper_cfg = { .group_id = group_id };
@@ -50,26 +59,48 @@ static esp_err_t init_phase(int group_id, mcpwm_timer_handle_t timer,
     err = mcpwm_new_generator(oper, &gen_cfg, &gen);
     if (err != ESP_OK) return err;
 
+    /* Force the output HIGH immediately.  MCPWM generators default to
+     * LOW, which with UL/VL/WL hardwired HIGH would turn on the
+     * low-side FET and short the phase to GND.  The force level is
+     * released by tmc6300_init() after the timer is running.          */
+    err = mcpwm_generator_set_force_level(gen, 1, true);
+    if (err != ESP_OK) return err;
+
     /* Center-aligned PWM waveform:
-     *   - Output goes LOW  when the timer counts UP past the compare
-     *   - Output goes HIGH when the timer counts DOWN past the compare
      *
-     * This produces a symmetric pulse centered on the timer trough
-     * (count = 0).  Duty = compare_value / peak.
+     *   - At the trough (count = 0, direction UP): set HIGH
+     *   - When the timer counts UP past the compare:  set LOW
+     *   - When the timer counts DOWN past the compare: set HIGH
+     *
+     * The trough action ensures correct initialisation of the output
+     * level on the very first PWM cycle after the force is released.
+     *
+     * This produces a symmetric pulse centered on the timer trough.
+     * Duty = compare_value / peak.
      *
      *   compare = 0      ->   0 % duty (always LOW)
      *   compare = peak/2 ->  50 % duty
      *   compare = peak   -> 100 % duty (always HIGH)          */
+    err = mcpwm_generator_set_action_on_timer_event(gen,
+              MCPWM_GEN_TIMER_EVENT_ACTION(
+                  MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY,
+                  MCPWM_GEN_ACTION_HIGH));
+    if (err != ESP_OK) return err;
+
     err = mcpwm_generator_set_action_on_compare_event(gen,
               MCPWM_GEN_COMPARE_EVENT_ACTION(
                   MCPWM_TIMER_DIRECTION_UP, *out_cmpr,
                   MCPWM_GEN_ACTION_LOW));
     if (err != ESP_OK) return err;
 
-    return mcpwm_generator_set_action_on_compare_event(gen,
+    err = mcpwm_generator_set_action_on_compare_event(gen,
               MCPWM_GEN_COMPARE_EVENT_ACTION(
                   MCPWM_TIMER_DIRECTION_DOWN, *out_cmpr,
                   MCPWM_GEN_ACTION_HIGH));
+    if (err != ESP_OK) return err;
+
+    *out_gen = gen;
+    return ESP_OK;
 }
 
 esp_err_t tmc6300_init(tmc6300_t *drv, int mcpwm_group,
@@ -104,15 +135,20 @@ esp_err_t tmc6300_init(tmc6300_t *drv, int mcpwm_group,
      * short all three phases to GND simultaneously, which can trigger
      * the TMC6300's overcurrent/fault protection and latch the driver
      * into a disabled state.  50 % keeps each phase at Vmotor / 2 on
-     * average, so no current flows and no fault is triggered.         */
+     * average, so no current flows and no fault is triggered.
+     *
+     * Each generator's output is forced HIGH during setup (see
+     * init_phase) and released below after the timer is running, so
+     * the TMC6300 never sees a LOW transient on any UH/VH/WH pin.    */
     uint32_t half = drv->max_duty / 2;
 
     mcpwm_cmpr_handle_t cu, cv, cw;
-    err = init_phase(mcpwm_group, timer, uh_gpio, half, &cu);
+    mcpwm_gen_handle_t  gu, gv, gw;
+    err = init_phase(mcpwm_group, timer, uh_gpio, half, &cu, &gu);
     if (err != ESP_OK) return err;
-    err = init_phase(mcpwm_group, timer, vh_gpio, half, &cv);
+    err = init_phase(mcpwm_group, timer, vh_gpio, half, &cv, &gv);
     if (err != ESP_OK) return err;
-    err = init_phase(mcpwm_group, timer, wh_gpio, half, &cw);
+    err = init_phase(mcpwm_group, timer, wh_gpio, half, &cw, &gw);
     if (err != ESP_OK) return err;
 
     drv->cmpr_u = cu;
@@ -123,7 +159,18 @@ esp_err_t tmc6300_init(tmc6300_t *drv, int mcpwm_group,
     err = mcpwm_timer_enable(timer);
     if (err != ESP_OK) return err;
 
-    return mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP);
+    err = mcpwm_timer_start_stop(timer, MCPWM_TIMER_START_NO_STOP);
+    if (err != ESP_OK) return err;
+
+    /* Release the force level on all three generators.  The timer is
+     * now running so the TEZ action (set HIGH at trough) and the
+     * compare actions produce a correct center-aligned waveform from
+     * the very first cycle.  There is no LOW glitch on any output.   */
+    err = mcpwm_generator_set_force_level(gu, -1, true);
+    if (err != ESP_OK) return err;
+    err = mcpwm_generator_set_force_level(gv, -1, true);
+    if (err != ESP_OK) return err;
+    return mcpwm_generator_set_force_level(gw, -1, true);
 }
 
 esp_err_t tmc6300_set_three_phase(const tmc6300_t *drv,
