@@ -22,19 +22,19 @@
 #define MOTOR1_UH_GPIO      1   /* Phase U high-side - PWM */
 #define MOTOR1_VH_GPIO      2   /* Phase V high-side - PWM */
 #define MOTOR1_WH_GPIO      3   /* Phase W high-side - PWM */
-#define MOTOR1_UL_GPIO      47  /* Phase U low-side - driven HIGH */
-#define MOTOR1_VL_GPIO      33  /* Phase V low-side - driven HIGH */
-#define MOTOR1_WL_GPIO      34  /* Phase W low-side - driven HIGH */
-#define MOTOR1_STANDBY_GPIO 13  /* STANDBY - HIGH = active, LOW = sleep */
+#define MOTOR1_UL_GPIO      39  /* Phase U low-side - driven HIGH */
+#define MOTOR1_VL_GPIO      40  /* Phase V low-side - driven HIGH */
+#define MOTOR1_WL_GPIO      41  /* Phase W low-side - driven HIGH */
+#define MOTOR1_STANDBY_GPIO 42  /* STANDBY - HIGH = active, LOW = sleep */
 
 /* -- Motor 2 -- TMC6300 #2 ------------------------------------------- */
-#define MOTOR2_UH_GPIO      15  /* Phase U high-side - PWM */
-#define MOTOR2_VH_GPIO      16  /* Phase V high-side - PWM */
-#define MOTOR2_WH_GPIO      17  /* Phase W high-side - PWM */
-#define MOTOR2_UL_GPIO      22  /* Phase U low-side - driven HIGH */
-#define MOTOR2_VL_GPIO      23  /* Phase V low-side - driven HIGH */
-#define MOTOR2_WL_GPIO      24  /* Phase W low-side - driven HIGH */
-#define MOTOR2_STANDBY_GPIO 14  /* STANDBY - HIGH = active, LOW = sleep */
+#define MOTOR2_UH_GPIO      13  /* Phase U high-side - PWM */
+#define MOTOR2_VH_GPIO      14  /* Phase V high-side - PWM */
+#define MOTOR2_WH_GPIO      15  /* Phase W high-side - PWM */
+#define MOTOR2_UL_GPIO      16  /* Phase U low-side - driven HIGH */
+#define MOTOR2_VL_GPIO      17  /* Phase V low-side - driven HIGH */
+#define MOTOR2_WL_GPIO      33  /* Phase W low-side - driven HIGH */
+#define MOTOR2_STANDBY_GPIO 34  /* STANDBY - HIGH = active, LOW = sleep */
 
 /* -- Game controller buttons (active-low, internal pull-up) ---------- */
 #define BUTTON_COUNT        10
