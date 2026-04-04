@@ -33,8 +33,8 @@
 #define MOTOR2_WH_GPIO      15  /* Phase W high-side - PWM */
 #define MOTOR2_UL_GPIO      16  /* Phase U low-side - driven HIGH */
 #define MOTOR2_VL_GPIO      17  /* Phase V low-side - driven HIGH */
-#define MOTOR2_WL_GPIO      33  /* Phase W low-side - driven HIGH */
-#define MOTOR2_STANDBY_GPIO 34  /* STANDBY - HIGH = active, LOW = sleep */
+#define MOTOR2_WL_GPIO      26  /* Phase W low-side - driven HIGH */
+#define MOTOR2_STANDBY_GPIO 27  /* STANDBY - HIGH = active, LOW = sleep */
 
 /* -- Game controller buttons (active-low, internal pull-up) ---------- */
 #define BUTTON_COUNT        10

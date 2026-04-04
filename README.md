@@ -37,8 +37,8 @@ changed there without modifying any other file.
 | MOTOR2_WH      | 15 | Motor 2 phase W - TMC6300 WH (PWM)    |
 | MOTOR2_UL      | 16 | Motor 2 phase U - TMC6300 UL (HIGH)   |
 | MOTOR2_VL      | 17 | Motor 2 phase V - TMC6300 VL (HIGH)   |
-| MOTOR2_WL      | 33 | Motor 2 phase W - TMC6300 WL (HIGH)   |
-| MOTOR2_STANDBY | 34 | Motor 2 TMC6300 STANDBY (HIGH=active) |
+| MOTOR2_WL      | 26 | Motor 2 phase W - TMC6300 WL (HIGH)   |
+| MOTOR2_STANDBY | 27 | Motor 2 TMC6300 STANDBY (HIGH=active) |
 | BUTTON0     | 4  | Game controller button 0 (active-low)  |
 | BUTTON1     | 5  | Game controller button 1 (active-low)  |
 | BUTTON2     | 6  | Game controller button 2 (active-low)  |
