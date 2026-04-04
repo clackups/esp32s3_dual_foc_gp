@@ -22,6 +22,7 @@ static esp_err_t init_pwm_channel(ledc_channel_t ch, ledc_timer_t timer,
 
 esp_err_t tmc6300_init(tmc6300_t *drv, ledc_timer_t timer,
                        int uh_gpio, int vh_gpio, int wh_gpio,
+                       int ul_gpio, int vl_gpio, int wl_gpio,
                        ledc_channel_t ch_base,
                        uint32_t freq_hz, ledc_timer_bit_t resolution,
                        int standby_gpio)
@@ -42,6 +43,26 @@ esp_err_t tmc6300_init(tmc6300_t *drv, ledc_timer_t timer,
     drv->ch_w     = ch_base + 2;
     drv->max_duty = (1U << resolution) - 1;
     drv->standby_gpio = standby_gpio;
+
+    /* Drive UL/VL/WL HIGH so the low-side FETs are always on.
+     * This enables 3-PWM mode: high-side PWM + low-side always
+     * conducting, completing the current path through each phase. */
+    {
+        const int low_gpios[] = { ul_gpio, vl_gpio, wl_gpio };
+        for (int i = 0; i < 3; i++) {
+            const gpio_config_t lo_cfg = {
+                .pin_bit_mask = 1ULL << low_gpios[i],
+                .mode         = GPIO_MODE_OUTPUT,
+                .pull_up_en   = GPIO_PULLUP_DISABLE,
+                .pull_down_en = GPIO_PULLDOWN_DISABLE,
+                .intr_type    = GPIO_INTR_DISABLE,
+            };
+            err = gpio_config(&lo_cfg);
+            if (err != ESP_OK) return err;
+            err = gpio_set_level(low_gpios[i], 1);
+            if (err != ESP_OK) return err;
+        }
+    }
 
     /* If a STANDBY GPIO is provided, configure it as output and
      * drive HIGH to take the TMC6300 out of standby (active).      */

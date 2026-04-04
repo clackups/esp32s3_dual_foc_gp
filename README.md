@@ -28,10 +28,16 @@ changed there without modifying any other file.
 | MOTOR1_UH      | 1  | Motor 1 phase U - TMC6300 UH (PWM)    |
 | MOTOR1_VH      | 2  | Motor 1 phase V - TMC6300 VH (PWM)    |
 | MOTOR1_WH      | 3  | Motor 1 phase W - TMC6300 WH (PWM)    |
+| MOTOR1_UL      | 47 | Motor 1 phase U - TMC6300 UL (HIGH)   |
+| MOTOR1_VL      | 33 | Motor 1 phase V - TMC6300 VL (HIGH)   |
+| MOTOR1_WL      | 34 | Motor 1 phase W - TMC6300 WL (HIGH)   |
 | MOTOR1_STANDBY | 13 | Motor 1 TMC6300 STANDBY (HIGH=active) |
 | MOTOR2_UH      | 15 | Motor 2 phase U - TMC6300 UH (PWM)    |
 | MOTOR2_VH      | 16 | Motor 2 phase V - TMC6300 VH (PWM)    |
 | MOTOR2_WH      | 17 | Motor 2 phase W - TMC6300 WH (PWM)    |
+| MOTOR2_UL      | 22 | Motor 2 phase U - TMC6300 UL (HIGH)   |
+| MOTOR2_VL      | 23 | Motor 2 phase V - TMC6300 VL (HIGH)   |
+| MOTOR2_WL      | 24 | Motor 2 phase W - TMC6300 WL (HIGH)   |
 | MOTOR2_STANDBY | 14 | Motor 2 TMC6300 STANDBY (HIGH=active) |
 | BUTTON0     | 4  | Game controller button 0 (active-low)  |
 | BUTTON1     | 5  | Game controller button 1 (active-low)  |
@@ -58,18 +64,29 @@ Each 2804 motor has three coil wires (U, V, W).  A single TMC6300
 drives the three motor phases via its half-bridge outputs:
 
 ```
-  UH (PWM)  --> Phase U high-side gate
-  VH (PWM)  --> Phase V high-side gate
-  WH (PWM)  --> Phase W high-side gate
+  UH (PWM)  --> Phase U high-side gate   (ESP32-S3 PWM output)
+  VH (PWM)  --> Phase V high-side gate   (ESP32-S3 PWM output)
+  WH (PWM)  --> Phase W high-side gate   (ESP32-S3 PWM output)
+  UL (HIGH) --> Phase U low-side gate    (ESP32-S3 GPIO, driven HIGH)
+  VL (HIGH) --> Phase V low-side gate    (ESP32-S3 GPIO, driven HIGH)
+  WL (HIGH) --> Phase W low-side gate    (ESP32-S3 GPIO, driven HIGH)
   STANDBY   --> ESP32-S3 GPIO (driven HIGH to enable the driver)
   VIO       --> +3.3 V (logic level reference)
 ```
 
-**Important:** The TMC6300 STANDBY pin has an internal pull-down.  If
-left unconnected, the chip stays in low-power standby and the motor
-will not move.  The firmware drives the STANDBY GPIO HIGH during
-`tmc6300_init()` and LOW on `tmc6300_coast()`.  Make sure the STANDBY
-pin on each TMC6300 board is wired to the corresponding ESP32-S3 GPIO.
+**Important -- low-side enables (UL/VL/WL):** The TMC6300 has three
+high-side inputs (UH/VH/WH) and three low-side inputs (UL/VL/WL).
+In 3-PWM mode the high-side inputs receive sinusoidal PWM while the
+low-side inputs must be held HIGH so the complementary low-side FETs
+conduct whenever the high-side FET is off, completing the current path
+through each motor phase.  If UL/VL/WL are left floating or LOW, no
+current flows and the motor will not move.  The firmware drives them
+HIGH during `tmc6300_init()`.
+
+**Important -- STANDBY pin:** The TMC6300 STANDBY pin has an internal
+pull-down.  If left unconnected, the chip stays in low-power standby
+and the motor will not move.  The firmware drives the STANDBY GPIO
+HIGH during `tmc6300_init()`.
 
 The firmware drives all three coils with sinusoidal PWM (120 deg apart)
 to create a rotating magnetic field.  This true three-phase drive
