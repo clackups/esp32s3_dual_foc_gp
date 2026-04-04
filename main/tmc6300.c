@@ -8,8 +8,9 @@
 #include "tmc6300.h"
 #include "driver/mcpwm_prelude.h"
 
-/* MCPWM timer resolution.  80 MHz gives 2000 ticks per half-cycle at
- * 20 kHz, providing ~11-bit equivalent duty resolution.               */
+/* MCPWM timer resolution.  80 MHz gives a peak count of 2000 at
+ * 20 kHz (period_ticks = 4000, peak = 2000), providing ~11-bit
+ * equivalent duty resolution.                                         */
 #define MCPWM_RESOLUTION_HZ  80000000U
 
 /* ------------------------------------------------------------------ */
@@ -54,11 +55,11 @@ static esp_err_t init_phase(int group_id, mcpwm_timer_handle_t timer,
      *   - Output goes HIGH when the timer counts DOWN past the compare
      *
      * This produces a symmetric pulse centered on the timer trough
-     * (count = 0).  Duty = compare_value / period_ticks.
+     * (count = 0).  Duty = compare_value / peak.
      *
-     *   compare = 0            ->   0 % duty (always LOW)
-     *   compare = period / 2   ->  50 % duty
-     *   compare = period       -> 100 % duty (always HIGH)          */
+     *   compare = 0      ->   0 % duty (always LOW)
+     *   compare = peak/2 ->  50 % duty
+     *   compare = peak   -> 100 % duty (always HIGH)          */
     err = mcpwm_generator_set_action_on_compare_event(gen,
               MCPWM_GEN_COMPARE_EVENT_ACTION(
                   MCPWM_TIMER_DIRECTION_UP, *out_cmpr,
@@ -75,13 +76,14 @@ esp_err_t tmc6300_init(tmc6300_t *drv, int mcpwm_group,
                        int uh_gpio, int vh_gpio, int wh_gpio,
                        uint32_t freq_hz)
 {
-    /* Center-aligned (UP_DOWN) timer.  One full PWM cycle counts
-     * 0 -> period_ticks -> 0, so the cycle time is
-     * 2 * period_ticks / resolution_hz.
+    /* Center-aligned (UP_DOWN) timer.  For UP_DOWN mode, period_ticks
+     * is the total number of ticks in one complete PWM cycle.  The
+     * timer counts from 0 to peak (= period_ticks / 2) and back to 0.
      *
-     * period_ticks = resolution_hz / (2 * freq_hz)                   */
-    uint32_t period_ticks = MCPWM_RESOLUTION_HZ / (2 * freq_hz);
-    drv->max_duty = period_ticks;
+     * period_ticks = resolution_hz / freq_hz
+     * peak         = period_ticks / 2  (maximum comparator value)     */
+    uint32_t period_ticks = MCPWM_RESOLUTION_HZ / freq_hz;
+    drv->max_duty = period_ticks / 2;
 
     mcpwm_timer_config_t timer_cfg = {
         .group_id      = mcpwm_group,
@@ -103,7 +105,7 @@ esp_err_t tmc6300_init(tmc6300_t *drv, int mcpwm_group,
      * the TMC6300's overcurrent/fault protection and latch the driver
      * into a disabled state.  50 % keeps each phase at Vmotor / 2 on
      * average, so no current flows and no fault is triggered.         */
-    uint32_t half = period_ticks / 2;
+    uint32_t half = drv->max_duty / 2;
 
     mcpwm_cmpr_handle_t cu, cv, cw;
     err = init_phase(mcpwm_group, timer, uh_gpio, half, &cu);
