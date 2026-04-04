@@ -24,8 +24,7 @@ esp_err_t tmc6300_init(tmc6300_t *drv, ledc_timer_t timer,
                        int uh_gpio, int vh_gpio, int wh_gpio,
                        int ul_gpio, int vl_gpio, int wl_gpio,
                        ledc_channel_t ch_base,
-                       uint32_t freq_hz, ledc_timer_bit_t resolution,
-                       int standby_gpio)
+                       uint32_t freq_hz, ledc_timer_bit_t resolution)
 {
     /* Configure the LEDC timer for this TMC6300 instance. */
     const ledc_timer_config_t timer_cfg = {
@@ -42,7 +41,6 @@ esp_err_t tmc6300_init(tmc6300_t *drv, ledc_timer_t timer,
     drv->ch_v     = ch_base + 1;
     drv->ch_w     = ch_base + 2;
     drv->max_duty = (1U << resolution) - 1;
-    drv->standby_gpio = standby_gpio;
 
     /* Drive UL/VL/WL HIGH so the low-side FETs are always on.
      * This enables 3-PWM mode: high-side PWM + low-side always
@@ -62,22 +60,6 @@ esp_err_t tmc6300_init(tmc6300_t *drv, ledc_timer_t timer,
             err = gpio_set_level(low_gpios[i], 1);
             if (err != ESP_OK) return err;
         }
-    }
-
-    /* If a STANDBY GPIO is provided, configure it as output and
-     * drive HIGH to take the TMC6300 out of standby (active).      */
-    if (standby_gpio >= 0) {
-        const gpio_config_t stby_cfg = {
-            .pin_bit_mask = 1ULL << standby_gpio,
-            .mode         = GPIO_MODE_OUTPUT,
-            .pull_up_en   = GPIO_PULLUP_DISABLE,
-            .pull_down_en = GPIO_PULLDOWN_DISABLE,
-            .intr_type    = GPIO_INTR_DISABLE,
-        };
-        err = gpio_config(&stby_cfg);
-        if (err != ESP_OK) return err;
-        err = gpio_set_level(standby_gpio, 1);
-        if (err != ESP_OK) return err;
     }
 
     /* PWM on UH, VH, WH (three motor phases). */
@@ -119,22 +101,4 @@ esp_err_t tmc6300_coast(const tmc6300_t *drv)
     err = set_duty(drv->ch_v, 0);
     if (err != ESP_OK) return err;
     return set_duty(drv->ch_w, 0);
-}
-
-esp_err_t tmc6300_standby(const tmc6300_t *drv)
-{
-    esp_err_t err = tmc6300_coast(drv);
-    if (err != ESP_OK) return err;
-    if (drv->standby_gpio >= 0) {
-        return gpio_set_level(drv->standby_gpio, 0);
-    }
-    return ESP_OK;
-}
-
-esp_err_t tmc6300_wake(const tmc6300_t *drv)
-{
-    if (drv->standby_gpio >= 0) {
-        return gpio_set_level(drv->standby_gpio, 1);
-    }
-    return ESP_OK;
 }

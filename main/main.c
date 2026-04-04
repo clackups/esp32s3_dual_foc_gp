@@ -299,16 +299,14 @@ void app_main(void)
                                  MOTOR1_UL_GPIO, MOTOR1_VL_GPIO,
                                  MOTOR1_WL_GPIO,
                                  LEDC_CHANNEL_0,
-                                 MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION,
-                                 MOTOR1_STANDBY_GPIO));
+                                 MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
     ESP_ERROR_CHECK(tmc6300_init(&s_drv2, LEDC_TIMER_1,
                                  MOTOR2_UH_GPIO, MOTOR2_VH_GPIO,
                                  MOTOR2_WH_GPIO,
                                  MOTOR2_UL_GPIO, MOTOR2_VL_GPIO,
                                  MOTOR2_WL_GPIO,
                                  LEDC_CHANNEL_3,
-                                 MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION,
-                                 MOTOR2_STANDBY_GPIO));
+                                 MOTOR_PWM_FREQ_HZ, MOTOR_PWM_RESOLUTION));
 
     ESP_LOGI(TAG, "Calibrating FOC ...");
     foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS, s_motor1_angle_offset);
