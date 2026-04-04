@@ -18,6 +18,7 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
                      : (dead_zone > 0.49f) ? 0.49f
                      : dead_zone;
     axis->phase_offset    = 0.0f;
+    axis->cont_ref_angle  = 0.0f;
     axis->cont_ref_tick   = 0;
     axis->cont_kicking    = 0;
     axis->cont_kick_start = 0;
