@@ -17,11 +17,7 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
     axis->dead_zone  = (dead_zone < 0.0f) ? 0.0f
                      : (dead_zone > 0.49f) ? 0.49f
                      : dead_zone;
-    axis->phase_offset    = 0.0f;
-    axis->cont_ref_angle  = 0.0f;
-    axis->cont_ref_tick   = 0;
-    axis->cont_kicking    = 0;
-    axis->cont_kick_start = 0;
+    axis->phase_offset = 0.0f;
 }
 
 esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position)
@@ -176,19 +172,6 @@ esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent)
 
 /* -- Continuous centering mode --------------------------------------- */
 
-/** Angular threshold below which the rotor is considered stationary
- *  for stuck detection (~1 degree). */
-#define CONT_STUCK_RAD      0.02f
-
-/** Time the rotor must be stuck before an anti-cogging kick (ms). */
-#define CONT_STUCK_MS       300
-
-/** Duration of the anti-cogging kick (ms). */
-#define CONT_KICK_MS        30
-
-/** Normalised torque applied during the anti-cogging kick. */
-#define CONT_KICK_TORQUE    1.0f
-
 esp_err_t haptic_continuous_update(haptic_axis_t *axis,
                                    float center_angle,
                                    float half_range,
@@ -235,43 +218,6 @@ esp_err_t haptic_continuous_update(haptic_axis_t *axis,
         float force = initial_force + t * (max_force - initial_force);
         float sign  = (norm >= 0.0f) ? 1.0f : -1.0f;
         torque = force * sign;
-    }
-
-    /* Anti-cogging: if the rotor is stuck outside the dead zone for
-     * longer than CONT_STUCK_MS, apply a brief full-torque kick toward
-     * the centre to break free from the cogging equilibrium.          */
-    uint32_t now = (uint32_t)xTaskGetTickCount();
-
-    if (abs_norm <= dead_zone) {
-        /* At centre -- reset stuck detection. */
-        axis->cont_ref_tick = 0;
-        axis->cont_kicking  = 0;
-    } else if (axis->cont_kicking) {
-        if ((now - axis->cont_kick_start) < pdMS_TO_TICKS(CONT_KICK_MS)) {
-            /* Kick in progress -- override with full torque. */
-            torque = (norm >= 0.0f) ? CONT_KICK_TORQUE : -CONT_KICK_TORQUE;
-        } else {
-            /* Kick finished -- reset for fresh stuck detection. */
-            axis->cont_kicking = 0;
-            axis->cont_ref_tick = 0;
-        }
-    } else {
-        /* Normal centering -- check if rotor is stuck. */
-        float diff = angle - axis->cont_ref_angle;
-        if (diff >  (float)M_PI) diff -= 2.0f * (float)M_PI;
-        if (diff < -(float)M_PI) diff += 2.0f * (float)M_PI;
-
-        if (axis->cont_ref_tick == 0 || fabsf(diff) > CONT_STUCK_RAD) {
-            /* Not tracking or rotor moved -- (re)start stuck timer. */
-            axis->cont_ref_angle = angle;
-            axis->cont_ref_tick  = now | 1u;  /* ensure non-zero */
-        } else if ((now - axis->cont_ref_tick) >=
-                   pdMS_TO_TICKS(CONT_STUCK_MS)) {
-            /* Stuck too long -- start anti-cogging kick. */
-            axis->cont_kicking    = 1;
-            axis->cont_kick_start = now;
-            torque = (norm >= 0.0f) ? CONT_KICK_TORQUE : -CONT_KICK_TORQUE;
-        }
     }
 
     return foc_set_torque(axis->motor, torque);

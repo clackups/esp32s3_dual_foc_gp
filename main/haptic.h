@@ -45,11 +45,6 @@ typedef struct {
     float        step_angle;       /* 2pi / steps (computed)            */
     float        dead_zone;        /* fraction of step_angle (0-<0.5)  */
     float        phase_offset;     /* angular offset for detent centres */
-    /* Anti-cogging state for continuous centering mode (internal). */
-    float        cont_ref_angle;   /* angle when stuck timer started    */
-    uint32_t     cont_ref_tick;    /* FreeRTOS tick at timer start (0=off) */
-    uint8_t      cont_kicking;     /* non-zero while kick is active     */
-    uint32_t     cont_kick_start;  /* FreeRTOS tick when kick started   */
 } haptic_axis_t;
 
 /**
