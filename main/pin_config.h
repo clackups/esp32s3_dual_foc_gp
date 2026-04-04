@@ -10,29 +10,33 @@
 /*
  * Motor wiring (2804 BLDC, 3 coil inputs U/V/W):
  *   TMC6300 -- three-phase MOSFET gate driver.
- *   UH (PWM)  -> Phase U high-side gate  (sinusoidal PWM)
- *   VH (PWM)  -> Phase V high-side gate  (sinusoidal PWM)
- *   WH (PWM)  -> Phase W high-side gate  (sinusoidal PWM)
+ *   Board pin order: UL, UH, VL, VH, WL, WH
  *   UL (HIGH) -> Phase U low-side gate   (always on for 3-PWM mode)
+ *   UH (PWM)  -> Phase U high-side gate  (sinusoidal PWM)
  *   VL (HIGH) -> Phase V low-side gate   (always on for 3-PWM mode)
+ *   VH (PWM)  -> Phase V high-side gate  (sinusoidal PWM)
  *   WL (HIGH) -> Phase W low-side gate   (always on for 3-PWM mode)
+ *   WH (PWM)  -> Phase W high-side gate  (sinusoidal PWM)
+ *
+ *   GPIOs are assigned so that consecutive ESP32-S3 pins map to
+ *   consecutive TMC6300 board pins (UL, UH, VL, VH, WL, WH).
  */
 
 /* -- Motor 1 -- TMC6300 #1 ------------------------------------------- */
-#define MOTOR1_UH_GPIO      1   /* Phase U high-side - PWM */
-#define MOTOR1_VH_GPIO      2   /* Phase V high-side - PWM */
-#define MOTOR1_WH_GPIO      3   /* Phase W high-side - PWM */
-#define MOTOR1_UL_GPIO      39  /* Phase U low-side - driven HIGH */
-#define MOTOR1_VL_GPIO      40  /* Phase V low-side - driven HIGH */
-#define MOTOR1_WL_GPIO      41  /* Phase W low-side - driven HIGH */
+#define MOTOR1_UL_GPIO      1   /* Phase U low-side - driven HIGH */
+#define MOTOR1_UH_GPIO      2   /* Phase U high-side - PWM */
+#define MOTOR1_VL_GPIO      3   /* Phase V low-side - driven HIGH */
+#define MOTOR1_VH_GPIO      39  /* Phase V high-side - PWM */
+#define MOTOR1_WL_GPIO      40  /* Phase W low-side - driven HIGH */
+#define MOTOR1_WH_GPIO      41  /* Phase W high-side - PWM */
 
 /* -- Motor 2 -- TMC6300 #2 ------------------------------------------- */
-#define MOTOR2_UH_GPIO      13  /* Phase U high-side - PWM */
-#define MOTOR2_VH_GPIO      14  /* Phase V high-side - PWM */
-#define MOTOR2_WH_GPIO      15  /* Phase W high-side - PWM */
-#define MOTOR2_UL_GPIO      16  /* Phase U low-side - driven HIGH */
-#define MOTOR2_VL_GPIO      17  /* Phase V low-side - driven HIGH */
-#define MOTOR2_WL_GPIO      42  /* Phase W low-side - driven HIGH */
+#define MOTOR2_UL_GPIO      13  /* Phase U low-side - driven HIGH */
+#define MOTOR2_UH_GPIO      14  /* Phase U high-side - PWM */
+#define MOTOR2_VL_GPIO      15  /* Phase V low-side - driven HIGH */
+#define MOTOR2_VH_GPIO      16  /* Phase V high-side - PWM */
+#define MOTOR2_WL_GPIO      17  /* Phase W low-side - driven HIGH */
+#define MOTOR2_WH_GPIO      42  /* Phase W high-side - PWM */
 
 /* -- Game controller buttons (active-low, internal pull-up) ---------- */
 #define BUTTON_COUNT        10

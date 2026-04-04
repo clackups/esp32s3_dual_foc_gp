@@ -25,18 +25,18 @@ changed there without modifying any other file.
 
 | Signal | GPIO | Description |
 |--------|------|-------------|
-| MOTOR1_UH      | 1  | Motor 1 phase U - TMC6300 UH (PWM)    |
-| MOTOR1_VH      | 2  | Motor 1 phase V - TMC6300 VH (PWM)    |
-| MOTOR1_WH      | 3  | Motor 1 phase W - TMC6300 WH (PWM)    |
-| MOTOR1_UL      | 39 | Motor 1 phase U - TMC6300 UL (HIGH)   |
-| MOTOR1_VL      | 40 | Motor 1 phase V - TMC6300 VL (HIGH)   |
-| MOTOR1_WL      | 41 | Motor 1 phase W - TMC6300 WL (HIGH)   |
-| MOTOR2_UH      | 13 | Motor 2 phase U - TMC6300 UH (PWM)    |
-| MOTOR2_VH      | 14 | Motor 2 phase V - TMC6300 VH (PWM)    |
-| MOTOR2_WH      | 15 | Motor 2 phase W - TMC6300 WH (PWM)    |
-| MOTOR2_UL      | 16 | Motor 2 phase U - TMC6300 UL (HIGH)   |
-| MOTOR2_VL      | 17 | Motor 2 phase V - TMC6300 VL (HIGH)   |
-| MOTOR2_WL      | 42 | Motor 2 phase W - TMC6300 WL (HIGH)   |
+| MOTOR1_UL      | 1  | Motor 1 phase U - TMC6300 UL (HIGH)   |
+| MOTOR1_UH      | 2  | Motor 1 phase U - TMC6300 UH (PWM)    |
+| MOTOR1_VL      | 3  | Motor 1 phase V - TMC6300 VL (HIGH)   |
+| MOTOR1_VH      | 39 | Motor 1 phase V - TMC6300 VH (PWM)    |
+| MOTOR1_WL      | 40 | Motor 1 phase W - TMC6300 WL (HIGH)   |
+| MOTOR1_WH      | 41 | Motor 1 phase W - TMC6300 WH (PWM)    |
+| MOTOR2_UL      | 13 | Motor 2 phase U - TMC6300 UL (HIGH)   |
+| MOTOR2_UH      | 14 | Motor 2 phase U - TMC6300 UH (PWM)    |
+| MOTOR2_VL      | 15 | Motor 2 phase V - TMC6300 VL (HIGH)   |
+| MOTOR2_VH      | 16 | Motor 2 phase V - TMC6300 VH (PWM)    |
+| MOTOR2_WL      | 17 | Motor 2 phase W - TMC6300 WL (HIGH)   |
+| MOTOR2_WH      | 42 | Motor 2 phase W - TMC6300 WH (PWM)    |
 | BUTTON0     | 4  | Game controller button 0 (active-low)  |
 | BUTTON1     | 5  | Game controller button 1 (active-low)  |
 | BUTTON2     | 6  | Game controller button 2 (active-low)  |
