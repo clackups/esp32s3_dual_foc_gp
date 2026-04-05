@@ -29,14 +29,22 @@
  *  restoring force is applied.  Valid range: 0 (disabled) to < 1. */
 #define HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE 0.02f
 
-/** Normalised torque applied immediately when the rotor leaves the
- *  dead zone (0 - 1).  Set equal to max_force for constant-force
- *  (bang-bang) centering so the restoring torque always exceeds the
- *  motor's cogging torque at every position.  Must be <= max_force. */
+/** Field amplitude applied immediately when the rotor leaves the
+ *  dead zone (0 - 1).  Higher values give stronger pull at each step
+ *  position.  Must be <= max_force. */
 #define HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE 0.80f
 
-/** Peak normalised torque at the maximum angle (0 - 1). */
+/** Peak field amplitude at the maximum angle (0 - 1). */
 #define HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE 0.90f
+
+/** Electrical-angle step size (degrees) for the stepper-like centering
+ *  mode.  Each update tick advances the open-loop field target by at
+ *  most this many electrical degrees toward the centre.  The mechanical
+ *  step is step_edeg * pi / 180 / pole_pairs.  A value of 30 gives
+ *  ~4.3 mechanical degrees per tick with 7 pole pairs, which is large
+ *  enough to overcome cogging while keeping the advance speed moderate.
+ *  Tune this value if centering feels too slow or too aggressive. */
+#define HAPTIC_CONTINUOUS_STEP_EDEG 30.0f
 
 typedef struct {
     foc_motor_t *motor;
@@ -105,25 +113,32 @@ esp_err_t haptic_calibrate(haptic_axis_t *axis);
 esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent);
 
 /**
- * Run one tick of the continuous centering loop.
+ * Run one tick of the continuous centering loop (stepper-like mode).
  *
- * Instead of haptic detents the motor applies a linear restoring
- * force toward @p center_angle.  The force profile is:
+ * Instead of applying a constant restoring torque (which can leave
+ * the rotor stuck at cogging positions), this function advances the
+ * open-loop field target by one step toward @p center_angle each
+ * tick.  The rotor aligns with the field like a stepper motor,
+ * guaranteeing rotation through cogging positions.
  *
- *   |error| <= dead_zone * half_range  ->  torque = 0
- *   |error| just outside dead zone     ->  torque = initial_force
- *   |error| == half_range              ->  torque = max_force
+ * Step size is HAPTIC_CONTINUOUS_STEP_EDEG electrical degrees
+ * converted to mechanical radians via the motor's pole-pair count.
  *
- * Between the dead-zone boundary and half_range the torque ramps
- * linearly from initial_force to max_force.  The sign of the torque
- * matches the sign of the error (toward centre).
+ * The force profile is:
+ *
+ *   |error| <= dead_zone * half_range  ->  coast (no field)
+ *   |error| just outside dead zone     ->  amplitude = initial_force
+ *   |error| == half_range              ->  amplitude = max_force
+ *
+ * Between the dead-zone boundary and half_range the field amplitude
+ * ramps linearly from initial_force to max_force.
  *
  * @param axis           Initialised axis (motor must be calibrated).
  * @param center_angle   Target centre angle in radians.
  * @param half_range     Half of the total angular travel (radians).
  * @param dead_zone      Dead zone as a fraction of half_range (0-<1).
- * @param initial_force  Normalised torque at the dead-zone edge (0-1).
- * @param max_force      Peak normalised torque at half_range (0-1).
+ * @param initial_force  Field amplitude at the dead-zone edge (0-1).
+ * @param max_force      Peak field amplitude at half_range (0-1).
  * @param[out] raw_angle   If non-NULL, receives the current mechanical
  *                         angle in radians.
  * @return ESP_OK on success.

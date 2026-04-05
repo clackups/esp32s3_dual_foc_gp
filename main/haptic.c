@@ -197,28 +197,45 @@ esp_err_t haptic_continuous_update(haptic_axis_t *axis,
     if (norm < -1.0f) norm = -1.0f;
 
     float abs_norm = fabsf(norm);
-    float torque;
 
     /* Clamp dead_zone to a safe range. */
     if (dead_zone < 0.0f) dead_zone = 0.0f;
     if (dead_zone > 0.99f) dead_zone = 0.99f;
 
     if (abs_norm <= dead_zone) {
-        /* Inside the dead zone -- no restoring force. */
-        torque = 0.0f;
-    } else {
-        /* Linear ramp from initial_force at the dead-zone edge to
-         * max_force at |norm| == 1 (full half_range).
-         *
-         *   active_range = 1 - dead_zone
-         *   t = (|norm| - dead_zone) / active_range   (0 at edge, 1 at max)
-         *   force = initial_force + t * (max_force - initial_force)        */
-        float active_range = 1.0f - dead_zone;
-        float t = (abs_norm - dead_zone) / active_range;
-        float force = initial_force + t * (max_force - initial_force);
-        float sign  = (norm >= 0.0f) ? 1.0f : -1.0f;
-        torque = force * sign;
+        /* Inside the dead zone -- coast. */
+        return foc_coast(axis->motor);
     }
 
-    return foc_set_torque(axis->motor, torque);
+    /*
+     * Stepper-like approach: set the open-loop field to a target
+     * position one step closer to centre.  The rotor aligns with
+     * the field, guaranteeing rotation despite cogging.
+     *
+     * Step size is HAPTIC_CONTINUOUS_STEP_EDEG electrical degrees
+     * converted to mechanical radians.
+     */
+    float step_mech = HAPTIC_CONTINUOUS_STEP_EDEG
+                    * ((float)M_PI / 180.0f)
+                    / (float)axis->motor->pole_pairs;
+
+    float sign = (error >= 0.0f) ? 1.0f : -1.0f;
+    float abs_error = fabsf(error);
+
+    /* Target is one step from current angle toward centre,
+     * but don't overshoot the centre. */
+    float target;
+    if (abs_error <= step_mech) {
+        target = center_angle;
+    } else {
+        target = angle + sign * step_mech;
+    }
+
+    /* Field amplitude ramps from initial_force to max_force
+     * based on distance from the dead-zone edge. */
+    float active_range = 1.0f - dead_zone;
+    float t = (abs_norm - dead_zone) / active_range;
+    float amplitude = initial_force + t * (max_force - initial_force);
+
+    return foc_set_target(axis->motor, target, amplitude);
 }

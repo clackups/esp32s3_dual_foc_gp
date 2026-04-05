@@ -314,6 +314,44 @@ esp_err_t foc_set_torque(foc_motor_t *motor, float torque)
                                  (uint32_t)(dw_f + 0.5f));
 }
 
+esp_err_t foc_set_target(foc_motor_t *motor, float target_angle,
+                         float amplitude)
+{
+    float two_pi = 2.0f * (float)M_PI;
+
+    /* Electrical angle at the target mechanical position. */
+    float elec_angle = fmodf(target_angle * motor->pole_pairs, two_pi)
+                       - motor->zero_electrical_angle;
+
+    /* Calibration correction for the target position. */
+    float bin_f     = target_angle
+                    * ((float)FOC_CAL_TABLE_SIZE / two_pi);
+    float bin_floor = floorf(bin_f);
+    int   bin0      = (int)bin_floor % FOC_CAL_TABLE_SIZE;
+    if (bin0 < 0) bin0 += FOC_CAL_TABLE_SIZE;
+    int   bin1 = (bin0 + 1) % FOC_CAL_TABLE_SIZE;
+    float frac = bin_f - bin_floor;
+    elec_angle += motor->cal_table[bin0]
+               + frac * (motor->cal_table[bin1] - motor->cal_table[bin0]);
+
+    /* No 90-degree advance: the field points AT the target so the
+     * rotor is pulled to align with it (stepper-motor principle). */
+    uint32_t half = motor->driver->max_duty / 2;
+
+    float du_f = half + half * amplitude * sinf(elec_angle);
+    float dv_f = half + half * amplitude * sinf(elec_angle - TWO_PI_OVER_3);
+    float dw_f = half + half * amplitude * sinf(elec_angle + TWO_PI_OVER_3);
+
+    if (du_f < 0.0f) du_f = 0.0f;
+    if (dv_f < 0.0f) dv_f = 0.0f;
+    if (dw_f < 0.0f) dw_f = 0.0f;
+
+    return l298n_set_three_phase(motor->driver,
+                                 (uint32_t)(du_f + 0.5f),
+                                 (uint32_t)(dv_f + 0.5f),
+                                 (uint32_t)(dw_f + 0.5f));
+}
+
 esp_err_t foc_coast(foc_motor_t *motor)
 {
     return l298n_coast(motor->driver);

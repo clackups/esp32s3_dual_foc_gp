@@ -60,6 +60,25 @@ esp_err_t foc_calibrate(foc_motor_t *motor);
 esp_err_t foc_set_torque(foc_motor_t *motor, float torque);
 
 /**
+ * Set the open-loop field to align the rotor at a target mechanical
+ * angle (stepper-motor principle).
+ *
+ * Unlike foc_set_torque() which advances the field 90 electrical
+ * degrees ahead of the current rotor position (producing continuous
+ * torque), this function places the field AT the target position so
+ * the rotor is pulled to align with it.  This guarantees rotation
+ * through cogging positions because the alignment force of the
+ * energised field overwhelms the cogging torque.
+ *
+ * @param motor         Initialised & calibrated motor.
+ * @param target_angle  Target mechanical angle in radians.
+ * @param amplitude     Field amplitude (0 ... 1.0).
+ * @return ESP_OK on success.
+ */
+esp_err_t foc_set_target(foc_motor_t *motor, float target_angle,
+                         float amplitude);
+
+/**
  * Coast the motor (de-energise all phases).
  */
 esp_err_t foc_coast(foc_motor_t *motor);
