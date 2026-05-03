@@ -1,75 +1,65 @@
 # esp32s3_dual_foc_gp
 
 USB game controller for ESP32-S3 where two axes are controlled by two
-**2804 BLDC motors** (3 coil inputs, 7 pole pairs) coupled with AS5600
-magnetic encoders, providing haptic detent feedback through the motor
-torque.  The motors are driven by Mini L298N dual-H-bridge boards.  Each
-motor axis has a separately configurable number of haptic steps per
-full revolution.
+**M5Stack Unit-Roller485** smart motor units, providing haptic detent
+feedback through the motor torque.  Each Roller485 contains its own
+BLDC motor, magnetic encoder and FOC controller; the ESP32-S3 talks
+to each unit over a dedicated I2C bus and only sends position
+commands.  Each motor axis has a separately configurable number of
+haptic steps per full revolution.
 
 ## Hardware
 
 | Component | Qty | Notes |
 |-----------|-----|-------|
-| ESP32-S3 DevKit | 1 | Any board with native USB-OTG |
-| Mini L298N board | 2 | One per BLDC motor (no ENA/ENB) |
-| 2804 BLDC motor | 2 | 3 coil inputs (U/V/W), 7 pole pairs (14P/12N) |
-| AS5600 magnetic encoder | 2 | One per motor, on separate I2C buses |
-| Diametric magnet | 2 | Attached to each motor shaft |
-| Tactile button | 10 | Active-low, one per gamepad button |
+| ESP32-S3 DevKit            | 1 | Any board with native USB-OTG |
+| M5Stack Unit-Roller485     | 2 | One per axis, each on its own I2C bus |
+| Tactile button             | 10 | Active-low, one per gamepad button |
+
+The Roller485 documentation (I2C protocol):
+<https://m5stack-doc.oss-cn-shenzhen.aliyuncs.com/776/Unit-Roller485-I2C-Protocol-EN.pdf>
+
+The Arduino driver examples we modeled the I2C usage on:
+<https://github.com/m5stack/M5Unit-Roller>
+
+Each Roller485 has a fixed default I2C address (0x64), so the two units
+must live on **separate** I2C buses.
 
 ### Default GPIO wiring
 
-All pin assignments are defined in **`main/pin_config.h`** and can be
-changed there without modifying any other file.
+User-configurable pins (the two I2C buses, the haptic step count and
+the Roller485 maximum-current limit) live in the **`Dual-FOC GP`**
+top-level menuconfig menu (`idf.py menuconfig`).  The fixed pins
+(buttons, mode toggle, status LED) are defined in
+**`main/pin_config.h`**.
 
-| Signal | GPIO | Description |
-|--------|------|-------------|
-| MOTOR1_IN1  | 1  | Motor 1 coil U - Mini L298N IN1 (PWM) |
-| MOTOR1_IN2  | 2  | Motor 1 coil V - Mini L298N IN2 (PWM) |
-| MOTOR1_IN3  | 3  | Motor 1 coil W - Mini L298N IN3 (PWM) |
-| MOTOR2_IN1  | 15 | Motor 2 coil U - Mini L298N IN1 (PWM) |
-| MOTOR2_IN2  | 16 | Motor 2 coil V - Mini L298N IN2 (PWM) |
-| MOTOR2_IN3  | 17 | Motor 2 coil W - Mini L298N IN3 (PWM) |
-| BUTTON0     | 4  | Game controller button 0 (active-low)  |
-| BUTTON1     | 5  | Game controller button 1 (active-low)  |
-| BUTTON2     | 6  | Game controller button 2 (active-low)  |
-| BUTTON3     | 7  | Game controller button 3 (active-low)  |
-| BUTTON4     | 8  | Game controller button 4 (active-low)  |
-| BUTTON5     | 18 | Game controller button 5 (active-low)  |
-| BUTTON6     | 21 | Game controller button 6 (active-low)  |
-| BUTTON7     | 36 | Game controller button 7 (active-low)  |
-| BUTTON8     | 37 | Game controller button 8 (active-low)  |
-| BUTTON9     | 38 | Game controller button 9 (active-low)  |
-| ENCODER1_SDA | 9 | AS5600 #1 - I2C SDA |
-| ENCODER1_SCL | 10 | AS5600 #1 - I2C SCL |
-| ENCODER2_SDA | 11 | AS5600 #2 - I2C SDA |
-| ENCODER2_SCL | 12 | AS5600 #2 - I2C SCL |
-| STATUS_LED  | 48 | WS2812 status LED                      |
+| Signal        | Default GPIO | Description |
+|---------------|--------------|-------------|
+| ROLLER1_SDA   | 9 (Kconfig)  | Roller485 #1 - I2C SDA |
+| ROLLER1_SCL   | 10 (Kconfig) | Roller485 #1 - I2C SCL |
+| ROLLER2_SDA   | 11 (Kconfig) | Roller485 #2 - I2C SDA |
+| ROLLER2_SCL   | 12 (Kconfig) | Roller485 #2 - I2C SCL |
+| BUTTON0       | 4            | Game controller button 0 (active-low) |
+| BUTTON1       | 5            | Game controller button 1 (active-low) |
+| BUTTON2       | 6            | Game controller button 2 (active-low) |
+| BUTTON3       | 7            | Game controller button 3 (active-low) |
+| BUTTON4       | 8            | Game controller button 4 (active-low) |
+| BUTTON5       | 18           | Game controller button 5 (active-low) |
+| BUTTON6       | 21           | Game controller button 6 (active-low) |
+| BUTTON7       | 36           | Game controller button 7 (active-low) |
+| BUTTON8       | 37           | Game controller button 8 (active-low) |
+| BUTTON9       | 38           | Game controller button 9 (active-low) |
+| MODE_TOGGLE   | 35           | Haptic / continuous toggle (active-low) |
+| STATUS_LED    | 48           | WS2812 status LED |
 
 USB D-/D+ use the ESP32-S3 native USB-OTG pins (GPIO 19/20) and
 require no additional configuration.
 
-### Motor wiring (2804 BLDC -- 3 coil inputs)
-
-Each 2804 motor has three coil wires (U, V, W).  A single Mini L298N
-drives the three motor coils via IN1-IN3:
-
-```
-  IN1 (PWM) --> OUT1 --> Coil U
-  IN2 (PWM) --> OUT2 --> Coil V
-  IN3 (PWM) --> OUT3 --> Coil W
-```
-
-The firmware drives all three coils with sinusoidal PWM (120 deg apart)
-to create a rotating magnetic field.  This true three-phase drive
-produces smoother torque than a two-phase approximation.
-
 ## Software prerequisites
 
 * **ESP-IDF v5.x** -- [installation guide](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/)
-* The project pulls `espressif/esp_tinyusb` automatically from the
-  IDF Component Registry on first build.
+* The project pulls `espressif/esp_tinyusb` and `espressif/led_strip`
+  automatically from the IDF Component Registry on first build.
 
 ## Build & flash
 
@@ -80,6 +70,9 @@ produces smoother torque than a two-phase approximation.
 # Set the target (only needed once)
 idf.py set-target esp32s3
 
+# (Optional) review or change the "Dual-FOC GP" options
+idf.py menuconfig
+
 # Build
 idf.py build
 
@@ -89,35 +82,28 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 ## Configuration
 
-### Haptic steps per revolution
+All user-tunable parameters live in the top-level **`Dual-FOC GP`**
+menu of `idf.py menuconfig`:
 
-In **`main/main.c`**, change these variables (initialised at startup):
+| Kconfig symbol               | Default | Purpose |
+|------------------------------|---------|---------|
+| `DFGP_HAPTIC_DEFAULT_STEPS`  | 21      | Number of haptic detent steps per full revolution |
+| `DFGP_HAPTIC_MAX_CURRENT`    | 20000   | Maximum current sent to the Roller485 (register 0x20). The unit matches the Roller485 firmware convention (0.01 mA, so 20000 = 200 mA). Higher values give a stronger detent snap but draw more current |
+| `DFGP_ROLLER1_SDA_GPIO`      | 9       | SDA GPIO for the Roller485 #1 I2C bus |
+| `DFGP_ROLLER1_SCL_GPIO`      | 10      | SCL GPIO for the Roller485 #1 I2C bus |
+| `DFGP_ROLLER2_SDA_GPIO`      | 11      | SDA GPIO for the Roller485 #2 I2C bus |
+| `DFGP_ROLLER2_SCL_GPIO`      | 12      | SCL GPIO for the Roller485 #2 I2C bus |
+| `DFGP_ROLLER_I2C_FREQ_HZ`    | 400000  | I2C clock for both Roller485 buses |
+
+Per-axis runtime overrides (steps and max-current) are in
+**`main/main.c`** at the top of the file:
 
 ```c
-static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
-static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 7 */
+static uint16_t s_motor1_steps       = HAPTIC_DEFAULT_STEPS;
+static uint16_t s_motor2_steps       = HAPTIC_DEFAULT_STEPS;
+static int32_t  s_motor1_max_current = HAPTIC_DEFAULT_MAX_CURRENT;
+static int32_t  s_motor2_max_current = HAPTIC_DEFAULT_MAX_CURRENT;
 ```
-
-### Haptic feedback strength
-
-Peak normalised torque for the detent effect (0 - 1).  Adjust per-axis
-in **`main/main.c`**:
-
-```c
-static float s_motor1_strength = HAPTIC_DEFAULT_STRENGTH;  /* 0.25 */
-static float s_motor2_strength = HAPTIC_DEFAULT_STRENGTH;  /* 0.25 */
-```
-
-### Motor pole pairs
-
-The 2804 BLDC motor has 7 pole pairs (14 poles, 12 slots).  The
-default is set in `FOC_DEFAULT_POLE_PAIRS` in `main/foc.h`.  Override
-it per-motor in `main/main.c` if you use a different motor.
-
-### GPIO assignments
-
-Edit **`main/pin_config.h`** -- every hardware pin is a `#define` in
-that one file.
 
 ## Project structure
 
@@ -125,35 +111,44 @@ that one file.
 |-- CMakeLists.txt          Top-level ESP-IDF project file
 |-- sdkconfig.defaults      Default Kconfig settings (target, USB)
 |-- README.md               This file
+|-- AGENTS.MD               Coding-style instructions for AI agents
 `-- main/
     |-- CMakeLists.txt      Component registration
+    |-- Kconfig.projbuild   "Dual-FOC GP" menuconfig options
     |-- idf_component.yml   IDF Component Registry dependencies
-    |-- pin_config.h        *** All GPIO assignments ***
-    |-- as5600.h / .c       AS5600 I2C encoder driver
-    |-- l298n.h / .c        Mini L298N PWM motor driver (3-phase)
-    |-- foc.h / .c          Three-phase sinusoidal FOC
-    |-- haptic.h / .c       Haptic detent engine
+    |-- pin_config.h        Fixed GPIO assignments (buttons / LED / toggle)
+    |-- roller485.h / .c    M5Stack Unit-Roller485 I2C driver
+    |-- haptic.h / .c       Haptic detent engine (Roller485 position mode)
     |-- usb_gamepad.h / .c  USB HID gamepad (TinyUSB)
     `-- main.c              Application entry point
 ```
 
 ## How it works
 
-1. **Encoder reading** -- Each AS5600 provides a 12-bit absolute angle
-   over I2C.  Two separate I2C buses are used because the AS5600 has a
-   fixed address (0x36).
+1. **Roller485 initialisation** -- Each unit is placed in position mode
+   over its dedicated I2C bus, the maximum current limit
+   (`DFGP_HAPTIC_MAX_CURRENT`, register `0x20`) is configured, the
+   current shaft position is captured as detent index 0, and the
+   output is enabled.
 
-2. **FOC torque control** -- A three-phase FOC algorithm converts a
-   desired torque command into sinusoidal phase voltages (120 deg apart)
-   for the 2804 motor's coils U, V, and W.  The Mini L298N drives
-   all three phases via PWM on IN1-IN3.
+2. **Haptic detents** -- The haptic engine reads the actual position
+   from the Roller485 (register `0x90`), snaps it to the nearest
+   detent in encoder counts (one revolution = 36000 counts), and
+   writes that target back (register `0x80`) only when it changes.
+   The Roller485's internal PID + current limiter pulls the rotor
+   to the target with the maximum current cap, producing the
+   detent "snap" feel.
 
-3. **Haptic detents** -- The haptic engine divides one full rotation
-   into N equal steps and applies a spring-like restoring torque toward
-   the nearest detent centre.
+3. **Continuous centering mode** -- Holding the mode-toggle button
+   switches each axis from detent feedback to a constant-centering
+   mode where the target is permanently the middle position.  The
+   Roller485 keeps the rotor centred while still allowing the user
+   to push it within the current limit; the actual position is
+   reported on the HID axis.
 
-4. **USB HID** -- The current detent index of each axis is mapped to an
-   8-bit value and sent to the host as a standard USB gamepad report.
+4. **USB HID** -- The current detent index of each axis (or the
+   continuous-mode position deviation) is mapped to a signed 16-bit
+   value and sent to the host as a standard USB gamepad report.
 
 ## License
 

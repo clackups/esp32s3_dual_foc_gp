@@ -1,0 +1,65 @@
+menu "Dual-FOC GP"
+
+    config DFGP_HAPTIC_DEFAULT_STEPS
+        int "Number of haptic detent steps per revolution"
+        range 2 360
+        default 21
+        help
+            Number of equal detent positions per full motor revolution.
+            The haptic engine snaps the rotor to the nearest detent.
+
+    config DFGP_HAPTIC_MAX_CURRENT
+        int "Maximum current sent to the Roller485 (register 0x20)"
+        range 0 120000
+        default 20000
+        help
+            Maximum motor current limit, written to the Roller485
+            position-mode max-current register (0x20).  The unit is the
+            same as expected by the Roller485 firmware (0.01 mA, so a
+            value of 20000 corresponds to 200 mA).  Higher values give
+            stronger detent snap-to torque but draw more current.
+
+    comment "I2C bus 1 (Roller485 unit #1)"
+
+    config DFGP_ROLLER1_SDA_GPIO
+        int "Roller485 #1 SDA GPIO"
+        range 0 48
+        default 9
+        help
+            GPIO number used for the SDA line of the I2C bus that talks
+            to Roller485 unit #1.
+
+    config DFGP_ROLLER1_SCL_GPIO
+        int "Roller485 #1 SCL GPIO"
+        range 0 48
+        default 10
+        help
+            GPIO number used for the SCL line of the I2C bus that talks
+            to Roller485 unit #1.
+
+    comment "I2C bus 2 (Roller485 unit #2)"
+
+    config DFGP_ROLLER2_SDA_GPIO
+        int "Roller485 #2 SDA GPIO"
+        range 0 48
+        default 11
+        help
+            GPIO number used for the SDA line of the I2C bus that talks
+            to Roller485 unit #2.
+
+    config DFGP_ROLLER2_SCL_GPIO
+        int "Roller485 #2 SCL GPIO"
+        range 0 48
+        default 12
+        help
+            GPIO number used for the SCL line of the I2C bus that talks
+            to Roller485 unit #2.
+
+    config DFGP_ROLLER_I2C_FREQ_HZ
+        int "Roller485 I2C clock frequency (Hz)"
+        range 100000 1000000
+        default 400000
+        help
+            I2C clock speed for both Roller485 buses, in Hz.
+
+endmenu

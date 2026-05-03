@@ -1,73 +1,61 @@
 /*
- * haptic.h -- Haptic-detent feedback engine.
+ * haptic.h -- Haptic-detent feedback engine using a M5Stack Roller485.
  *
  * Each motor axis is divided into a configurable number of equal steps
- * per full rotation.  The engine pulls the rotor toward the nearest
- * detent position with a spring-like restoring torque.
+ * per full rotation.  The Roller485 is run in position mode and the
+ * target position is continuously snapped to the nearest detent so
+ * that the device's internal PID + current limiter pulls the rotor
+ * toward that detent with a configurable maximum current.
  */
 
 #pragma once
 
-#include "foc.h"
+#include "roller485.h"
+#include "sdkconfig.h"
+#include <stdint.h>
 
-/** Default number of steps per 360 deg revolution.
- *  Matches FOC_DEFAULT_POLE_PAIRS (7) so that every detent centre
- *  falls at the same electrical angle, giving uniform resistance. */
-#define HAPTIC_DEFAULT_STEPS 21
+/** Number of position counts in one full revolution.
+ *  The Roller485 uses 0.01 deg position units, so 360 * 100 = 36000. */
+#define HAPTIC_COUNTS_PER_REV 36000
 
-/** Maximum normalised torque applied for the detent effect (0 - 1). */
-#define HAPTIC_DEFAULT_STRENGTH 0.85f
+/** Default number of detent steps per revolution.  Sourced from the
+ *  user-visible "Dual-FOC GP" Kconfig menu. */
+#define HAPTIC_DEFAULT_STEPS  CONFIG_DFGP_HAPTIC_DEFAULT_STEPS
 
-/** Default dead-zone expressed as a fraction of one step angle.
- *  Within this zone around a detent centre the rotor is treated as
- *  being at the neutral position and no restoring torque is applied.
- *  Valid range: 0 (disabled) to just below 0.5. */
-#define HAPTIC_DEFAULT_DEAD_ZONE 0.00f
-
-/** Default dead zone for continuous centering mode, expressed as a
- *  fraction of half_range.  Within this zone around the centre no
- *  restoring force is applied.  Valid range: 0 (disabled) to < 1. */
-#define HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE 0.02f
-
-/** Normalised torque applied immediately when the rotor leaves the
- *  dead zone (0 - 1).  Set equal to max_force for constant-force
- *  (bang-bang) centering so the restoring torque always exceeds the
- *  motor's cogging torque at every position.  Must be <= max_force. */
-#define HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE 0.80f
-
-/** Peak normalised torque at the maximum angle (0 - 1). */
-#define HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE 0.90f
+/** Default maximum current limit (Roller485 register 0x20).
+ *  Sourced from the "Dual-FOC GP" Kconfig menu. */
+#define HAPTIC_DEFAULT_MAX_CURRENT CONFIG_DFGP_HAPTIC_MAX_CURRENT
 
 typedef struct {
-    foc_motor_t *motor;
-    uint16_t     steps;            /* detent positions per revolution  */
-    float        strength;         /* peak normalised torque (0 - 1)   */
-    float        step_angle;       /* 2pi / steps (computed)            */
-    float        dead_zone;        /* fraction of step_angle (0-<0.5)  */
-    float        phase_offset;     /* angular offset for detent centres */
+    roller485_t *roller;
+    uint16_t     steps;             /* detent positions per revolution  */
+    int32_t      counts_per_step;   /* HAPTIC_COUNTS_PER_REV / steps    */
+    int32_t      max_current;       /* Roller485 register 0x20 value    */
+    int32_t      origin_counts;     /* zero-step position (counts)      */
+    int32_t      last_target;       /* last position written to roller  */
 } haptic_axis_t;
 
 /**
  * Initialise a haptic axis.
  *
- * @param axis      Pointer to haptic_axis_t to initialise.
- * @param motor     An already-initialised and calibrated foc_motor_t.
- * @param steps     Number of detent steps per full rotation.
- * @param strength  Peak normalised torque (0 - 1).
- * @param dead_zone Fraction of one step angle that is still treated as
- *                  the neutral (detent-centre) position.  0 disables
- *                  the dead zone; values are clamped below 0.5.
+ * Configures the Roller485 for closed-loop position mode with the
+ * requested maximum current, captures the current shaft position as
+ * the zero-step origin, and commands the axis to remain there.
+ *
+ * @param axis        Pointer to haptic_axis_t to initialise.
+ * @param roller      Already-initialised Roller485 unit.
+ * @param steps       Number of detent steps per full rotation (>= 2).
+ * @param max_current Maximum current limit (Roller485 register 0x20).
+ * @return ESP_OK on success.
  */
-void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
-                 uint16_t steps, float strength, float dead_zone);
+esp_err_t haptic_init(haptic_axis_t *axis, roller485_t *roller,
+                      uint16_t steps, int32_t max_current);
 
 /**
- * Run one tick of the haptic loop: read angle, compute nearest detent,
- * apply restoring torque.
+ * Run one tick of the haptic loop: read actual position, snap to the
+ * nearest detent, command the Roller485 to that position if changed.
  *
- * Call this at a fixed rate (e.g. every 1 ms from a FreeRTOS task).
- *
- * @param axis  Initialised axis.
+ * @param axis      Initialised axis.
  * @param[out] position  If non-NULL, receives the current step index
  *                       (0 ... steps-1).
  * @return ESP_OK on success.
@@ -75,30 +63,11 @@ void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
 esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position);
 
 /**
- * Calibrate the detent phase offset.
+ * Drive the motor to a specific detent position.  The Roller485
+ * internal controller handles the trajectory, so this call only
+ * issues the position target and returns immediately.
  *
- * The AS5600 encoder has an arbitrary orientation relative to the motor
- * coils, so the default detent positions (multiples of step_angle
- * starting at 0) may not coincide with the motor's natural cogging
- * positions.  This routine gives the rotor several kicks in alternating
- * directions, lets it coast to rest after each one, and measures where
- * it settles.  The mean rest position (circular average) within one
- * step is stored in axis->phase_offset, shifting every detent so that
- * its centre aligns with the cogging equilibrium.
- *
- * Call after haptic_init() and before the haptic loop starts.
- * Blocks for approximately 2 seconds.
- *
- * @param axis  Initialised axis (motor must be calibrated).
- * @return ESP_OK on success.
- */
-esp_err_t haptic_calibrate(haptic_axis_t *axis);
-
-/**
- * Drive the motor to a specific detent position using proportional
- * control, then coast.  Blocks for approximately 500 ms.
- *
- * @param axis    Initialised and calibrated axis.
+ * @param axis    Initialised axis.
  * @param detent  Target detent index (0 ... steps-1).
  * @return ESP_OK on success.
  */
@@ -107,31 +76,15 @@ esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent);
 /**
  * Run one tick of the continuous centering loop.
  *
- * Instead of haptic detents the motor applies a linear restoring
- * force toward @p center_angle.  The force profile is:
+ * The Roller485 is held at the centre angle (in counts) by its
+ * internal position PID.  The current limit caps the restoring force.
  *
- *   |error| <= dead_zone * half_range  ->  torque = 0
- *   |error| just outside dead zone     ->  torque = initial_force
- *   |error| == half_range              ->  torque = max_force
- *
- * Between the dead-zone boundary and half_range the torque ramps
- * linearly from initial_force to max_force.  The sign of the torque
- * matches the sign of the error (toward centre).
- *
- * @param axis           Initialised axis (motor must be calibrated).
- * @param center_angle   Target centre angle in radians.
- * @param half_range     Half of the total angular travel (radians).
- * @param dead_zone      Dead zone as a fraction of half_range (0-<1).
- * @param initial_force  Normalised torque at the dead-zone edge (0-1).
- * @param max_force      Peak normalised torque at half_range (0-1).
- * @param[out] raw_angle   If non-NULL, receives the current mechanical
- *                         angle in radians.
+ * @param axis             Initialised axis.
+ * @param center_counts    Centre position (Roller485 0.01 deg units).
+ * @param[out] raw_counts  If non-NULL, receives the current actual
+ *                         position in 0.01 deg units.
  * @return ESP_OK on success.
  */
 esp_err_t haptic_continuous_update(haptic_axis_t *axis,
-                                   float center_angle,
-                                   float half_range,
-                                   float dead_zone,
-                                   float initial_force,
-                                   float max_force,
-                                   float *raw_angle);
+                                   int32_t center_counts,
+                                   int32_t *raw_counts);

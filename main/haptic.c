@@ -1,224 +1,123 @@
 /*
- * haptic.c -- Haptic-detent feedback engine.
+ * haptic.c -- Haptic-detent feedback engine using a M5Stack Roller485.
+ *
+ * The Roller485 contains an integrated FOC controller, magnetic
+ * encoder, and position PID.  This module commands the unit in
+ * position mode to generate detent feel: every loop iteration we read
+ * the actual position, find the nearest detent and (when it changes)
+ * push the new target position over I2C.  The Roller485 then pulls
+ * the rotor to that target with a current capped at axis->max_current
+ * (register 0x20), which is what gives the haptic "snap" effect.
  */
 
 #include "haptic.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <math.h>
 
-void haptic_init(haptic_axis_t *axis, foc_motor_t *motor,
-                 uint16_t steps, float strength, float dead_zone)
+esp_err_t haptic_init(haptic_axis_t *axis, roller485_t *roller,
+                      uint16_t steps, int32_t max_current)
 {
-    axis->motor      = motor;
-    axis->steps      = (steps >= 2) ? steps : 2;
-    axis->strength   = strength;
-    axis->step_angle = 2.0f * (float)M_PI / (float)axis->steps;
-    axis->dead_zone  = (dead_zone < 0.0f) ? 0.0f
-                     : (dead_zone > 0.49f) ? 0.49f
-                     : dead_zone;
-    axis->phase_offset = 0.0f;
+    if (steps < 2) steps = 2;
+
+    axis->roller          = roller;
+    axis->steps           = steps;
+    axis->counts_per_step = HAPTIC_COUNTS_PER_REV / (int32_t)steps;
+    axis->max_current     = max_current;
+
+    /* Switch the unit off briefly while we change mode and limits.
+     * The example sketches in M5Unit-Roller follow the same pattern
+     * (setOutput(0) -> setMode -> setPos -> setOutput(1)).             */
+    esp_err_t err = roller485_set_output(roller, 0);
+    if (err != ESP_OK) return err;
+
+    err = roller485_set_mode(roller, ROLLER485_MODE_POSITION);
+    if (err != ESP_OK) return err;
+
+    err = roller485_set_pos_max_current(roller, max_current);
+    if (err != ESP_OK) return err;
+
+    /* Capture the current shaft position as detent index 0 so the
+     * detent grid lines up with wherever the rotor happens to be at
+     * power-up rather than with the absolute encoder zero.            */
+    int32_t pos = 0;
+    err = roller485_get_pos_readback(roller, &pos);
+    if (err != ESP_OK) return err;
+    axis->origin_counts = pos;
+    axis->last_target   = pos;
+
+    err = roller485_set_pos(roller, pos);
+    if (err != ESP_OK) return err;
+
+    return roller485_set_output(roller, 1);
+}
+
+/* Snap a raw position to the nearest detent (in absolute counts) and
+ * return the corresponding step index modulo axis->steps. */
+static int32_t snap_to_detent(const haptic_axis_t *axis, int32_t pos,
+                              uint16_t *step_index_out)
+{
+    int32_t rel = pos - axis->origin_counts;
+    /* Round to the nearest counts_per_step (handle negatives). */
+    int32_t cps = axis->counts_per_step;
+    int32_t nearest;
+    if (rel >= 0) {
+        nearest = (rel + cps / 2) / cps;
+    } else {
+        nearest = -((-rel + cps / 2) / cps);
+    }
+    int32_t snapped = axis->origin_counts + nearest * cps;
+
+    if (step_index_out) {
+        int32_t idx = nearest % (int32_t)axis->steps;
+        if (idx < 0) idx += (int32_t)axis->steps;
+        *step_index_out = (uint16_t)idx;
+    }
+    return snapped;
 }
 
 esp_err_t haptic_update(haptic_axis_t *axis, uint16_t *position)
 {
-    float angle;
-    esp_err_t err = foc_read_angle(axis->motor, &angle);
+    int32_t pos = 0;
+    esp_err_t err = roller485_get_pos_readback(axis->roller, &pos);
     if (err != ESP_OK) return err;
 
-    /* Nearest detent index and its centre angle. */
-    float shifted     = angle - axis->phase_offset;
-    float idx_f       = shifted / axis->step_angle;
-    int   nearest_idx = (int)roundf(idx_f);
-    float detent_angle = (float)nearest_idx * axis->step_angle + axis->phase_offset;
+    uint16_t step_idx = 0;
+    int32_t target = snap_to_detent(axis, pos, &step_idx);
 
-    /* Signed angular error from the detent centre. */
-    float delta = detent_angle - angle;
-
-    /* Wrap to -pi ... +pi (in practice delta is small). */
-    if (delta >  (float)M_PI) delta -= 2.0f * (float)M_PI;
-    if (delta < -(float)M_PI) delta += 2.0f * (float)M_PI;
-
-    /*
-     * Torque is proportional to the error, clamped to +/-strength.
-     * A dead-zone around the detent centre allows a small region where
-     * no restoring torque is applied (neutral position).
-     *
-     * Outside the dead zone the torque ramps from zero at the dead-zone
-     * boundary to +/-strength at half a step-angle.
-     */
-    float dz_rad = axis->dead_zone * axis->step_angle;
-    float abs_delta = (delta >= 0.0f) ? delta : -delta;
-    float torque;
-
-    if (abs_delta <= dz_rad) {
-        torque = 0.0f;
-    } else {
-        float active_range = axis->step_angle * 0.5f - dz_rad;
-        float gain = (active_range > 1e-6f)
-                   ? axis->strength / active_range
-                   : 0.0f;
-        float sign = (delta >= 0.0f) ? 1.0f : -1.0f;
-        torque = gain * (abs_delta - dz_rad) * sign;
-        if (torque >  axis->strength) torque =  axis->strength;
-        if (torque < -axis->strength) torque = -axis->strength;
+    if (target != axis->last_target) {
+        err = roller485_set_pos(axis->roller, target);
+        if (err != ESP_OK) return err;
+        axis->last_target = target;
     }
 
-    err = foc_set_torque(axis->motor, torque);
-    if (err != ESP_OK) return err;
-
-    if (position) {
-        int idx = nearest_idx % (int)axis->steps;
-        if (idx < 0) idx += (int)axis->steps;
-        *position = (uint16_t)idx;
-    }
+    if (position) *position = step_idx;
     return ESP_OK;
 }
-
-/* -- Haptic calibration -------------------------------------------- */
-
-/** Number of kick-settle measurements during calibration. */
-#define HAPTIC_CAL_SAMPLES   4
-
-/** Normalised torque amplitude for each calibration kick. */
-#define HAPTIC_CAL_KICK      0.3f
-
-/** Duration of each calibration kick (ms). */
-#define HAPTIC_CAL_KICK_MS   150
-
-/** Settle time after coasting (ms). */
-#define HAPTIC_CAL_SETTLE_MS 300
-
-esp_err_t haptic_calibrate(haptic_axis_t *axis)
-{
-    float two_pi  = 2.0f * (float)M_PI;
-    float sum_sin = 0.0f;
-    float sum_cos = 0.0f;
-
-    for (int i = 0; i < HAPTIC_CAL_SAMPLES; i++) {
-        /*
-         * Alternating kick direction moves the rotor to different
-         * cogging positions so we sample more than one resting spot.
-         */
-        float kick = (i % 2 == 0) ? HAPTIC_CAL_KICK : -HAPTIC_CAL_KICK;
-
-        esp_err_t err = foc_set_torque(axis->motor, kick);
-        if (err != ESP_OK) return err;
-        vTaskDelay(pdMS_TO_TICKS(HAPTIC_CAL_KICK_MS));
-
-        /*
-         * Coast the motor -- let it settle at the nearest cogging
-         * position under the rotor magnets' natural pull.
-         */
-        err = foc_coast(axis->motor);
-        if (err != ESP_OK) return err;
-        vTaskDelay(pdMS_TO_TICKS(HAPTIC_CAL_SETTLE_MS));
-
-        float rest;
-        err = foc_read_angle(axis->motor, &rest);
-        if (err != ESP_OK) return err;
-
-        /*
-         * Convert the rest angle to a phase within one step
-         * (0 ... 2pi), then accumulate sin/cos for circular averaging.
-         */
-        float rem = fmodf(rest, axis->step_angle);
-        if (rem < 0.0f) rem += axis->step_angle;
-        float phase = rem / axis->step_angle * two_pi;
-        sum_sin += sinf(phase);
-        sum_cos += cosf(phase);
-    }
-
-    /* Circular mean of the sampled rest phases. */
-    float mean_phase = atan2f(sum_sin, sum_cos);
-    if (mean_phase < 0.0f) mean_phase += two_pi;
-
-    axis->phase_offset = mean_phase / two_pi * axis->step_angle;
-
-    return ESP_OK;
-}
-
-/* -- Move to target detent ------------------------------------------ */
-
-/** Duration of the proportional-control settle loop (ms). */
-#define HAPTIC_MOVE_SETTLE_MS 500
 
 esp_err_t haptic_move_to_detent(haptic_axis_t *axis, uint16_t detent)
 {
-    float target = (float)detent * axis->step_angle + axis->phase_offset;
-    float gain   = axis->strength / (axis->step_angle * 0.5f);
-
-    for (int i = 0; i < HAPTIC_MOVE_SETTLE_MS; i++) {
-        float angle;
-        esp_err_t err = foc_read_angle(axis->motor, &angle);
-        if (err != ESP_OK) return err;
-
-        float error = target - angle;
-        if (error >  (float)M_PI) error -= 2.0f * (float)M_PI;
-        if (error < -(float)M_PI) error += 2.0f * (float)M_PI;
-
-        float torque = error * gain;
-        if (torque >  axis->strength) torque =  axis->strength;
-        if (torque < -axis->strength) torque = -axis->strength;
-
-        err = foc_set_torque(axis->motor, torque);
-        if (err != ESP_OK) return err;
-
-        vTaskDelay(pdMS_TO_TICKS(1));
-    }
-
-    return foc_coast(axis->motor);
+    int32_t target = axis->origin_counts +
+                     (int32_t)detent * axis->counts_per_step;
+    esp_err_t err = roller485_set_pos(axis->roller, target);
+    if (err != ESP_OK) return err;
+    axis->last_target = target;
+    return ESP_OK;
 }
 
-/* -- Continuous centering mode --------------------------------------- */
-
 esp_err_t haptic_continuous_update(haptic_axis_t *axis,
-                                   float center_angle,
-                                   float half_range,
-                                   float dead_zone,
-                                   float initial_force,
-                                   float max_force,
-                                   float *raw_angle)
+                                   int32_t center_counts,
+                                   int32_t *raw_counts)
 {
-    float angle;
-    esp_err_t err = foc_read_angle(axis->motor, &angle);
+    int32_t pos = 0;
+    esp_err_t err = roller485_get_pos_readback(axis->roller, &pos);
     if (err != ESP_OK) return err;
 
-    if (raw_angle) *raw_angle = angle;
+    if (raw_counts) *raw_counts = pos;
 
-    /* Signed error from centre, wrapped to -pi ... +pi. */
-    float error = center_angle - angle;
-    if (error >  (float)M_PI) error -= 2.0f * (float)M_PI;
-    if (error < -(float)M_PI) error += 2.0f * (float)M_PI;
-
-    /* Normalise to [-1, +1] and clamp. */
-    float norm = (half_range > 1e-6f) ? (error / half_range) : 0.0f;
-    if (norm >  1.0f) norm =  1.0f;
-    if (norm < -1.0f) norm = -1.0f;
-
-    float abs_norm = fabsf(norm);
-    float torque;
-
-    /* Clamp dead_zone to a safe range. */
-    if (dead_zone < 0.0f) dead_zone = 0.0f;
-    if (dead_zone > 0.99f) dead_zone = 0.99f;
-
-    if (abs_norm <= dead_zone) {
-        /* Inside the dead zone -- no restoring force. */
-        torque = 0.0f;
-    } else {
-        /* Linear ramp from initial_force at the dead-zone edge to
-         * max_force at |norm| == 1 (full half_range).
-         *
-         *   active_range = 1 - dead_zone
-         *   t = (|norm| - dead_zone) / active_range   (0 at edge, 1 at max)
-         *   force = initial_force + t * (max_force - initial_force)        */
-        float active_range = 1.0f - dead_zone;
-        float t = (abs_norm - dead_zone) / active_range;
-        float force = initial_force + t * (max_force - initial_force);
-        float sign  = (norm >= 0.0f) ? 1.0f : -1.0f;
-        torque = force * sign;
+    if (center_counts != axis->last_target) {
+        err = roller485_set_pos(axis->roller, center_counts);
+        if (err != ESP_OK) return err;
+        axis->last_target = center_counts;
     }
-
-    return foc_set_torque(axis->motor, torque);
+    return ESP_OK;
 }

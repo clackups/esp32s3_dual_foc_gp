@@ -1,15 +1,17 @@
 /*
  * main.c -- Dual-FOC haptic USB gamepad application entry point.
  *
- * Two 2804 BLDC motors (3 coil inputs, 7 pole pairs) with AS5600
- * encoders provide force-feedback detents.  The angular positions are
- * reported as USB HID gamepad axes.
+ * Two M5Stack Roller485 units (each on its own I2C bus) provide the
+ * motor + encoder + FOC controller for the two haptic axes.  The
+ * Roller485 is run in position mode and the haptic engine snaps the
+ * target position to the nearest detent at every loop iteration; the
+ * unit's internal PID + current limit (register 0x20) provides the
+ * detent "snap" feel.  The angular positions are reported as USB HID
+ * gamepad axes.
  */
 
 #include "pin_config.h"
-#include "as5600.h"
-#include "l298n.h"
-#include "foc.h"
+#include "roller485.h"
 #include "haptic.h"
 #include "usb_gamepad.h"
 
@@ -18,32 +20,20 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "led_strip.h"
-#include <math.h>
+#include "sdkconfig.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 static const char *TAG = "main";
 
 /* -- Per-axis configuration ------------------------------------------ */
-#define MOTOR_POLE_PAIRS  FOC_DEFAULT_POLE_PAIRS
-
-/* Steps and strength are runtime variables so they can be made
- * configurable later (e.g. via NVS or USB commands).               */
-static uint16_t s_motor1_steps    = HAPTIC_DEFAULT_STEPS;  /* 21 */
-static uint16_t s_motor2_steps    = HAPTIC_DEFAULT_STEPS;  /* 21 */
-static float    s_motor1_strength = HAPTIC_DEFAULT_STRENGTH;
-static float    s_motor2_strength = HAPTIC_DEFAULT_STRENGTH;
-static float    s_motor1_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
-static float    s_motor2_dead_zone = HAPTIC_DEFAULT_DEAD_ZONE;
-static float    s_motor1_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
-static float    s_motor2_angle_offset = 0.0f;  /* magnet mounting offset (rad) */
-
-/* -- Continuous centering mode variables ----------------------------- */
-static float    s_motor1_cont_dead_zone     = HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE;
-static float    s_motor2_cont_dead_zone     = HAPTIC_DEFAULT_CONTINUOUS_DEAD_ZONE;
-static float    s_motor1_cont_initial_force = HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE;
-static float    s_motor2_cont_initial_force = HAPTIC_DEFAULT_CONTINUOUS_INITIAL_FORCE;
-static float    s_motor1_cont_max_force     = HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE;
-static float    s_motor2_cont_max_force     = HAPTIC_DEFAULT_CONTINUOUS_MAX_FORCE;
+/* Steps and max current are runtime variables so they can be made
+ * configurable later (e.g. via NVS or USB commands).  Defaults come
+ * from the "Dual-FOC GP" Kconfig menu.                                */
+static uint16_t s_motor1_steps       = HAPTIC_DEFAULT_STEPS;
+static uint16_t s_motor2_steps       = HAPTIC_DEFAULT_STEPS;
+static int32_t  s_motor1_max_current = HAPTIC_DEFAULT_MAX_CURRENT;
+static int32_t  s_motor2_max_current = HAPTIC_DEFAULT_MAX_CURRENT;
 
 /* -- Button GPIO table ----------------------------------------------- */
 static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
@@ -53,9 +43,7 @@ static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
 };
 
 /* -- Hardware instances ---------------------------------------------- */
-static as5600_t      s_enc1, s_enc2;
-static l298n_t       s_drv1, s_drv2;
-static foc_motor_t   s_foc1, s_foc2;
+static roller485_t   s_roller1, s_roller2;
 static haptic_axis_t s_axis1, s_axis2;
 static led_strip_handle_t s_status_led;
 
@@ -68,79 +56,68 @@ static volatile uint16_t s_buttons;
 static volatile bool     s_continuous_mode;  /* true = continuous centering */
 static TaskHandle_t      s_report_task_handle;
 
-/* Centre position for each axis (steps / 2).  The HID report sends the
- * signed deviation from this midpoint, scaled to +/-32767.               */
+/* Centre detent index for haptic mode HID reporting. */
 static uint16_t s_pos1_middle;
 static uint16_t s_pos2_middle;
 
-/* Centre angle and half-range for continuous centering mode, computed
- * once after haptic calibration so that continuous mode uses the same
- * mechanical centre as the haptic detent layout.                       */
-static float s_center_angle1;
-static float s_center_angle2;
-static float s_half_range1;
-static float s_half_range2;
+/* Centre position (Roller485 0.01 deg counts) and half-range for the
+ * continuous centering mode.  The centre is captured at startup so
+ * that switching modes does not shift the neutral point.             */
+static int32_t s_center_counts1;
+static int32_t s_center_counts2;
+static int32_t s_half_range1;
+static int32_t s_half_range2;
 
-/* -- Haptic task for axis 1 (runs as fast as possible) -------------- */
+/* Map a raw position deviation in counts to an int16 HID axis value
+ * scaled to +/-32767, clamping out-of-range values.                  */
+static int16_t counts_to_hid(int32_t deviation, int32_t half_range)
+{
+    if (half_range <= 0) return 0;
+    int32_t v = deviation * 32767 / half_range;
+    if (v >  32767) v =  32767;
+    if (v < -32767) v = -32767;
+    return (int16_t)v;
+}
+
+/* -- Haptic task for axis 1 ----------------------------------------- */
 static void haptic1_task(void *arg)
 {
     (void)arg;
+    const TickType_t period = pdMS_TO_TICKS(2);
+    TickType_t last_wake = xTaskGetTickCount();
     for (;;) {
         if (s_continuous_mode) {
-            float raw_angle = 0.0f;
-            haptic_continuous_update(&s_axis1,
-                                    s_center_angle1, s_half_range1,
-                                    s_motor1_cont_dead_zone,
-                                    s_motor1_cont_initial_force,
-                                    s_motor1_cont_max_force,
-                                    &raw_angle);
-            /* Continuous HID: deviation from centre mapped linearly. */
-            float dev = raw_angle - s_center_angle1;
-            if (dev >  (float)M_PI) dev -= 2.0f * (float)M_PI;
-            if (dev < -(float)M_PI) dev += 2.0f * (float)M_PI;
-            int32_t v = (s_half_range1 > 1e-6f)
-                      ? (int32_t)roundf(dev / s_half_range1 * 32767.0f)
-                      : 0;
-            if (v >  32767) v =  32767;
-            if (v < -32767) v = -32767;
-            s_hid1 = (int16_t)v;
+            int32_t raw = 0;
+            haptic_continuous_update(&s_axis1, s_center_counts1, &raw);
+            s_hid1 = counts_to_hid(raw - s_center_counts1, s_half_range1);
         } else {
             uint16_t pos = 0;
             haptic_update(&s_axis1, &pos);
             s_pos1 = pos;
         }
         xTaskNotifyGive(s_report_task_handle);
+        vTaskDelayUntil(&last_wake, period);
     }
 }
 
-/* -- Haptic task for axis 2 (runs as fast as possible) -------------- */
+/* -- Haptic task for axis 2 ----------------------------------------- */
 static void haptic2_task(void *arg)
 {
     (void)arg;
+    const TickType_t period = pdMS_TO_TICKS(2);
+    TickType_t last_wake = xTaskGetTickCount();
     for (;;) {
         if (s_continuous_mode) {
-            float raw_angle = 0.0f;
-            haptic_continuous_update(&s_axis2,
-                                    s_center_angle2, s_half_range2,
-                                    s_motor2_cont_dead_zone,
-                                    s_motor2_cont_initial_force,
-                                    s_motor2_cont_max_force,
-                                    &raw_angle);
-            float dev = raw_angle - s_center_angle2;
-            if (dev >  (float)M_PI) dev -= 2.0f * (float)M_PI;
-            if (dev < -(float)M_PI) dev += 2.0f * (float)M_PI;
-            int32_t v = (s_half_range2 > 1e-6f)
-                      ? (int32_t)roundf(dev / s_half_range2 * 32767.0f)
-                      : 0;
-            if (v >  32767) v =  32767;
-            if (v < -32767) v = -32767;
-            s_hid2 = (int16_t)v;
+            int32_t raw = 0;
+            haptic_continuous_update(&s_axis2, s_center_counts2, &raw);
+            s_hid2 = counts_to_hid(raw - s_center_counts2, s_half_range2);
         } else {
             uint16_t pos = 0;
             haptic_update(&s_axis2, &pos);
             s_pos2 = pos;
         }
         xTaskNotifyGive(s_report_task_handle);
+        vTaskDelayUntil(&last_wake, period);
     }
 }
 
@@ -201,20 +178,16 @@ static void report_task(void *arg)
 
         if (s_continuous_mode) {
             /* In continuous mode the haptic tasks pre-compute the HID
-             * axis values from the raw encoder angle.                  */
+             * axis values from the actual measured position.          */
             v1 = s_hid1;
             v2 = s_hid2;
         } else {
             uint16_t pos1 = s_pos1;
             uint16_t pos2 = s_pos2;
 
-            /* Map position deviation from middle to signed 16-bit HID
-             * axis (-32767 ... +32767).  The centre detent (pos == middle)
-             * maps to exactly 0, so the host sees a true zero with no
-             * rounding artefacts.
-             *
-             * half = steps / 2 (equal to middle for odd step counts).
-             * val  = (pos - middle) * 32767 / half, clamped to +/-32767. */
+            /* Map detent index deviation from the middle to a signed
+             * 16-bit HID axis value.  half = steps / 2 (equal to
+             * middle for odd step counts). */
             int32_t half1 = (int32_t)(s_axis1.steps / 2);
             int32_t dev1  = (int32_t)pos1 - (int32_t)s_pos1_middle;
             int32_t val1  = (half1 > 0) ? (dev1 * 32767 / half1) : 0;
@@ -247,7 +220,7 @@ static void report_task(void *arg)
 /* -- Application entry point ---------------------------------------- */
 void app_main(void)
 {
-    /* -- Status LED -- red while booting / calibrating --------------- */
+    /* -- Status LED -- red while booting / initialising -------------- */
     const led_strip_config_t strip_cfg = {
         .strip_gpio_num   = STATUS_LED_GPIO,
         .max_leds         = 1,
@@ -260,13 +233,14 @@ void app_main(void)
     led_strip_set_pixel(s_status_led, 0, 32, 0, 0);   /* red */
     led_strip_refresh(s_status_led);
 
-    ESP_LOGI(TAG, "Initialising encoders ...");
-    ESP_ERROR_CHECK(as5600_init(&s_enc1, ENCODER1_I2C_PORT,
-                                ENCODER1_SDA_GPIO, ENCODER1_SCL_GPIO,
-                                ENCODER_I2C_FREQ_HZ));
-    ESP_ERROR_CHECK(as5600_init(&s_enc2, ENCODER2_I2C_PORT,
-                                ENCODER2_SDA_GPIO, ENCODER2_SCL_GPIO,
-                                ENCODER_I2C_FREQ_HZ));
+    ESP_LOGI(TAG, "Initialising Roller485 unit #1 ...");
+    ESP_ERROR_CHECK(roller485_init(&s_roller1, ROLLER1_I2C_PORT,
+                                   ROLLER1_SDA_GPIO, ROLLER1_SCL_GPIO,
+                                   ROLLER_I2C_FREQ_HZ));
+    ESP_LOGI(TAG, "Initialising Roller485 unit #2 ...");
+    ESP_ERROR_CHECK(roller485_init(&s_roller2, ROLLER2_I2C_PORT,
+                                   ROLLER2_SDA_GPIO, ROLLER2_SCL_GPIO,
+                                   ROLLER_I2C_FREQ_HZ));
 
     ESP_LOGI(TAG, "Initialising buttons ...");
     for (int i = 0; i < BUTTON_COUNT; i++) {
@@ -292,51 +266,33 @@ void app_main(void)
         ESP_ERROR_CHECK(gpio_config(&toggle_cfg));
     }
 
-    ESP_LOGI(TAG, "Initialising motor drivers ...");
-    ESP_ERROR_CHECK(l298n_init(&s_drv1, 0,
-                               MOTOR1_IN1_GPIO, MOTOR1_IN2_GPIO,
-                               MOTOR1_IN3_GPIO,
-                               MOTOR_PWM_FREQ_HZ));
-    ESP_ERROR_CHECK(l298n_init(&s_drv2, 1,
-                               MOTOR2_IN1_GPIO, MOTOR2_IN2_GPIO,
-                               MOTOR2_IN3_GPIO,
-                               MOTOR_PWM_FREQ_HZ));
-
-    ESP_LOGI(TAG, "Calibrating FOC ...");
-    foc_init(&s_foc1, &s_enc1, &s_drv1, MOTOR_POLE_PAIRS, s_motor1_angle_offset);
-    foc_init(&s_foc2, &s_enc2, &s_drv2, MOTOR_POLE_PAIRS, s_motor2_angle_offset);
-    ESP_ERROR_CHECK(foc_calibrate(&s_foc1));
-    ESP_LOGI(TAG, "Zero angle #1: %f", s_foc1.zero_electrical_angle);
-    ESP_ERROR_CHECK(foc_calibrate(&s_foc2));
-    ESP_LOGI(TAG, "Zero angle #2: %f", s_foc2.zero_electrical_angle);
-
-    ESP_LOGI(TAG, "Setting up haptic axes ...");
-    haptic_init(&s_axis1, &s_foc1, s_motor1_steps, s_motor1_strength, s_motor1_dead_zone);
-    haptic_init(&s_axis2, &s_foc2, s_motor2_steps, s_motor2_strength, s_motor2_dead_zone);
-
-    ESP_LOGI(TAG, "Calibrating haptic detent positions ...");
-    ESP_ERROR_CHECK(haptic_calibrate(&s_axis1));
-    ESP_ERROR_CHECK(haptic_calibrate(&s_axis2));
+    ESP_LOGI(TAG, "Setting up haptic axes (steps=%u, max_current=%ld) ...",
+             (unsigned)s_motor1_steps, (long)s_motor1_max_current);
+    ESP_ERROR_CHECK(haptic_init(&s_axis1, &s_roller1,
+                                s_motor1_steps, s_motor1_max_current));
+    ESP_ERROR_CHECK(haptic_init(&s_axis2, &s_roller2,
+                                s_motor2_steps, s_motor2_max_current));
 
     /* Compute and store the centre detent index for HID reporting. */
     s_pos1_middle = s_axis1.steps / 2;
     s_pos2_middle = s_axis2.steps / 2;
 
-    /* Compute centre angle and half-range for continuous centering mode.
-     * The centre matches the middle haptic detent so that switching
-     * modes does not shift the neutral point.                          */
-    s_center_angle1 = (float)s_pos1_middle * s_axis1.step_angle
-                    + s_axis1.phase_offset;
-    s_center_angle2 = (float)s_pos2_middle * s_axis2.step_angle
-                    + s_axis2.phase_offset;
-    s_half_range1   = (float)(s_axis1.steps / 2) * s_axis1.step_angle;
-    s_half_range2   = (float)(s_axis2.steps / 2) * s_axis2.step_angle;
+    /* Centre position (in Roller485 counts) and half-range for the
+     * continuous centering mode.  Uses the same mechanical centre as
+     * the haptic-detent middle so switching modes does not shift the
+     * neutral point.                                                  */
+    s_center_counts1 = s_axis1.origin_counts +
+                       (int32_t)s_pos1_middle * s_axis1.counts_per_step;
+    s_center_counts2 = s_axis2.origin_counts +
+                       (int32_t)s_pos2_middle * s_axis2.counts_per_step;
+    s_half_range1    = (int32_t)(s_axis1.steps / 2) * s_axis1.counts_per_step;
+    s_half_range2    = (int32_t)(s_axis2.steps / 2) * s_axis2.counts_per_step;
 
     ESP_LOGI(TAG, "Moving motors to centre position ...");
     ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis1, s_pos1_middle));
     ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, s_pos2_middle));
 
-    /* -- Status LED -- green, calibration complete ------------------- */
+    /* -- Status LED -- green, initialisation complete --------------- */
     led_strip_set_pixel(s_status_led, 0, 0, 32, 0);   /* green */
     led_strip_refresh(s_status_led);
 
