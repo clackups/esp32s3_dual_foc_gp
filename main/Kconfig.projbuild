@@ -62,4 +62,130 @@ menu "Dual-FOC GP"
         help
             I2C clock speed for both Roller485 buses, in Hz.
 
+    comment "Game controller buttons (active-low, internal pull-up)"
+
+    config DFGP_BUTTON0_GPIO
+        int "Button 0 GPIO"
+        range 0 48
+        default 4
+
+    config DFGP_BUTTON1_GPIO
+        int "Button 1 GPIO"
+        range 0 48
+        default 5
+
+    config DFGP_BUTTON2_GPIO
+        int "Button 2 GPIO"
+        range 0 48
+        default 6
+
+    config DFGP_BUTTON3_GPIO
+        int "Button 3 GPIO"
+        range 0 48
+        default 7
+
+    config DFGP_BUTTON4_GPIO
+        int "Button 4 GPIO"
+        range 0 48
+        default 8
+
+    config DFGP_BUTTON5_GPIO
+        int "Button 5 GPIO"
+        range 0 48
+        default 18
+
+    config DFGP_BUTTON6_GPIO
+        int "Button 6 GPIO"
+        range 0 48
+        default 21
+
+    config DFGP_BUTTON7_GPIO
+        int "Button 7 GPIO"
+        range 0 48
+        default 36
+
+    config DFGP_BUTTON8_GPIO
+        int "Button 8 GPIO"
+        range 0 48
+        default 37
+
+    config DFGP_BUTTON9_GPIO
+        int "Button 9 GPIO"
+        range 0 48
+        default 38
+
+    config DFGP_MODE_TOGGLE_GPIO
+        int "Mode toggle GPIO (haptic <-> continuous, active-low)"
+        range 0 48
+        default 35
+        help
+            GPIO that toggles between haptic-detent and continuous
+            centering modes.  Active-low with internal pull-up.
+
+    comment "Status LED"
+
+    choice DFGP_STATUS_LED_TYPE
+        prompt "Status LED type"
+        default DFGP_STATUS_LED_WS2812
+        help
+            Selects the kind of status RGB LED used to indicate the
+            current operating mode (red while booting, green for
+            haptic mode, blue for continuous mode).
+
+        config DFGP_STATUS_LED_WS2812
+            bool "Single WS2812 (NeoPixel) on one GPIO"
+            help
+                A single addressable WS2812 / NeoPixel LED driven from
+                one GPIO via the RMT peripheral.  Default for the
+                ESP32-S3 DevKitC and similar boards.
+
+        config DFGP_STATUS_LED_RGB_GPIOS
+            bool "Three discrete LEDs on three GPIOs"
+            help
+                Three separate single-colour LEDs (red, green, blue)
+                each driven from its own GPIO.  Matches the on-board
+                RGB LED of the Waveshare ESP32-S3-Nano.
+
+        config DFGP_STATUS_LED_NONE
+            bool "No status LED"
+            help
+                Disable status-LED reporting entirely.  No pins are
+                used and no LED driver is initialised.
+
+    endchoice
+
+    config DFGP_STATUS_LED_WS2812_GPIO
+        int "WS2812 status-LED GPIO"
+        depends on DFGP_STATUS_LED_WS2812
+        range 0 48
+        default 48
+        help
+            GPIO connected to the data input of the WS2812 LED.
+
+    config DFGP_STATUS_LED_R_GPIO
+        int "Red LED GPIO"
+        depends on DFGP_STATUS_LED_RGB_GPIOS
+        range 0 48
+        default 46
+
+    config DFGP_STATUS_LED_G_GPIO
+        int "Green LED GPIO"
+        depends on DFGP_STATUS_LED_RGB_GPIOS
+        range 0 48
+        default 0
+
+    config DFGP_STATUS_LED_B_GPIO
+        int "Blue LED GPIO"
+        depends on DFGP_STATUS_LED_RGB_GPIOS
+        range 0 48
+        default 45
+
+    config DFGP_STATUS_LED_RGB_ACTIVE_LOW
+        bool "Discrete RGB LEDs are active-low"
+        depends on DFGP_STATUS_LED_RGB_GPIOS
+        default n
+        help
+            Enable if the discrete RGB LED is wired so that driving
+            the GPIO low turns the LED on (common-anode arrangement).
+
 endmenu

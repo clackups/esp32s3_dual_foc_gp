@@ -13,13 +13,13 @@
 #include "pin_config.h"
 #include "roller485.h"
 #include "haptic.h"
+#include "status_led.h"
 #include "usb_gamepad.h"
 
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "led_strip.h"
 #include "sdkconfig.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -45,7 +45,6 @@ static const gpio_num_t s_button_gpios[BUTTON_COUNT] = {
 /* -- Hardware instances ---------------------------------------------- */
 static roller485_t   s_roller1, s_roller2;
 static haptic_axis_t s_axis1, s_axis2;
-static led_strip_handle_t s_status_led;
 
 /* -- Shared state (written by individual tasks, read by report task) -- */
 static volatile uint16_t s_pos1;
@@ -147,11 +146,10 @@ static void button_task(void *arg)
                      s_continuous_mode ? "continuous" : "haptic");
             /* Status LED: blue = continuous, green = haptic. */
             if (s_continuous_mode) {
-                led_strip_set_pixel(s_status_led, 0, 0, 0, 32);  /* blue */
+                status_led_set(0, 0, 32);  /* blue */
             } else {
-                led_strip_set_pixel(s_status_led, 0, 0, 32, 0);  /* green */
+                status_led_set(0, 32, 0);  /* green */
             }
-            led_strip_refresh(s_status_led);
         }
         prev_toggle_level = toggle_level;
 
@@ -221,17 +219,8 @@ static void report_task(void *arg)
 void app_main(void)
 {
     /* -- Status LED -- red while booting / initialising -------------- */
-    const led_strip_config_t strip_cfg = {
-        .strip_gpio_num   = STATUS_LED_GPIO,
-        .max_leds         = 1,
-    };
-    const led_strip_rmt_config_t rmt_cfg = {
-        .resolution_hz = 10 * 1000 * 1000,  /* 10 MHz */
-    };
-    ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_cfg, &rmt_cfg,
-                                             &s_status_led));
-    led_strip_set_pixel(s_status_led, 0, 32, 0, 0);   /* red */
-    led_strip_refresh(s_status_led);
+    ESP_ERROR_CHECK(status_led_init());
+    status_led_set(32, 0, 0);   /* red */
 
     ESP_LOGI(TAG, "Initialising Roller485 unit #1 ...");
     ESP_ERROR_CHECK(roller485_init(&s_roller1, ROLLER1_I2C_PORT,
@@ -293,8 +282,7 @@ void app_main(void)
     ESP_ERROR_CHECK(haptic_move_to_detent(&s_axis2, s_pos2_middle));
 
     /* -- Status LED -- green, initialisation complete --------------- */
-    led_strip_set_pixel(s_status_led, 0, 0, 32, 0);   /* green */
-    led_strip_refresh(s_status_led);
+    status_led_set(0, 32, 0);   /* green */
 
     ESP_LOGI(TAG, "Starting USB gamepad ...");
     ESP_ERROR_CHECK(usb_gamepad_init());

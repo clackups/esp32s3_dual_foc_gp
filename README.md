@@ -27,18 +27,16 @@ must live on **separate** I2C buses.
 
 ### Default GPIO wiring
 
-User-configurable pins (the two I2C buses, the haptic step count and
-the Roller485 maximum-current limit) live in the **`Dual-FOC GP`**
-top-level menuconfig menu (`idf.py menuconfig`).  The fixed pins
-(buttons, mode toggle, status LED) are defined in
-**`main/pin_config.h`**.
+All GPIO assignments are user-configurable through the **`Dual-FOC GP`**
+top-level menuconfig menu (`idf.py menuconfig`).  The defaults shown
+below match the original wiring for an ESP32-S3 DevKitC-style board.
 
 | Signal        | Default GPIO | Description |
 |---------------|--------------|-------------|
-| ROLLER1_SDA   | 9 (Kconfig)  | Roller485 #1 - I2C SDA |
-| ROLLER1_SCL   | 10 (Kconfig) | Roller485 #1 - I2C SCL |
-| ROLLER2_SDA   | 11 (Kconfig) | Roller485 #2 - I2C SDA |
-| ROLLER2_SCL   | 12 (Kconfig) | Roller485 #2 - I2C SCL |
+| ROLLER1_SDA   | 9            | Roller485 #1 - I2C SDA |
+| ROLLER1_SCL   | 10           | Roller485 #1 - I2C SCL |
+| ROLLER2_SDA   | 11           | Roller485 #2 - I2C SDA |
+| ROLLER2_SCL   | 12           | Roller485 #2 - I2C SCL |
 | BUTTON0       | 4            | Game controller button 0 (active-low) |
 | BUTTON1       | 5            | Game controller button 1 (active-low) |
 | BUTTON2       | 6            | Game controller button 2 (active-low) |
@@ -50,10 +48,25 @@ top-level menuconfig menu (`idf.py menuconfig`).  The fixed pins
 | BUTTON8       | 37           | Game controller button 8 (active-low) |
 | BUTTON9       | 38           | Game controller button 9 (active-low) |
 | MODE_TOGGLE   | 35           | Haptic / continuous toggle (active-low) |
-| STATUS_LED    | 48           | WS2812 status LED |
+| STATUS_LED    | (see below)  | Status RGB LED -- variant selectable |
 
 USB D-/D+ use the ESP32-S3 native USB-OTG pins (GPIO 19/20) and
 require no additional configuration.
+
+### Status LED variants
+
+The status RGB LED can be configured through the menuconfig choice
+`DFGP_STATUS_LED_TYPE`:
+
+1. **WS2812 (default)** -- A single addressable WS2812 / NeoPixel on
+   one GPIO (default GPIO 48, matches the on-board LED of the
+   ESP32-S3 DevKitC).
+2. **Three discrete LEDs** -- Three single-colour LEDs each on their
+   own GPIO.  Defaults match the on-board RGB LED of the
+   Waveshare ESP32-S3-Nano: red on GPIO 46, green on GPIO 0, blue on
+   GPIO 45.  An "active-low" option is provided for common-anode
+   wiring.
+3. **None** -- Disable the status LED entirely.  No pins are used.
 
 ## Software prerequisites
 
@@ -94,6 +107,14 @@ menu of `idf.py menuconfig`:
 | `DFGP_ROLLER2_SDA_GPIO`      | 11      | SDA GPIO for the Roller485 #2 I2C bus |
 | `DFGP_ROLLER2_SCL_GPIO`      | 12      | SCL GPIO for the Roller485 #2 I2C bus |
 | `DFGP_ROLLER_I2C_FREQ_HZ`    | 400000  | I2C clock for both Roller485 buses |
+| `DFGP_BUTTON0_GPIO` ... `DFGP_BUTTON9_GPIO` | 4, 5, 6, 7, 8, 18, 21, 36, 37, 38 | GPIO for each game-controller button |
+| `DFGP_MODE_TOGGLE_GPIO`      | 35      | GPIO for the haptic / continuous mode-toggle switch |
+| `DFGP_STATUS_LED_TYPE`       | WS2812  | Status LED variant: WS2812 / three discrete LEDs / none |
+| `DFGP_STATUS_LED_WS2812_GPIO`| 48      | GPIO for the WS2812 status LED (when WS2812 variant selected) |
+| `DFGP_STATUS_LED_R_GPIO`     | 46      | Red LED GPIO (when discrete-RGB variant selected) |
+| `DFGP_STATUS_LED_G_GPIO`     | 0       | Green LED GPIO (when discrete-RGB variant selected) |
+| `DFGP_STATUS_LED_B_GPIO`     | 45      | Blue LED GPIO (when discrete-RGB variant selected) |
+| `DFGP_STATUS_LED_RGB_ACTIVE_LOW` | n   | Set when the discrete RGB LEDs are wired common-anode |
 
 Per-axis runtime overrides (steps and max-current) are in
 **`main/main.c`** at the top of the file:
@@ -116,9 +137,10 @@ static int32_t  s_motor2_max_current = HAPTIC_DEFAULT_MAX_CURRENT;
     |-- CMakeLists.txt      Component registration
     |-- Kconfig.projbuild   "Dual-FOC GP" menuconfig options
     |-- idf_component.yml   IDF Component Registry dependencies
-    |-- pin_config.h        Fixed GPIO assignments (buttons / LED / toggle)
+    |-- pin_config.h        Re-exports the Kconfig GPIO defines
     |-- roller485.h / .c    M5Stack Unit-Roller485 I2C driver
     |-- haptic.h / .c       Haptic detent engine (Roller485 position mode)
+    |-- status_led.h / .c   Status RGB LED abstraction (WS2812 / discrete / none)
     |-- usb_gamepad.h / .c  USB HID gamepad (TinyUSB)
     `-- main.c              Application entry point
 ```
